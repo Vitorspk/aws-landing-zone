@@ -1,0 +1,53 @@
+name: Terraform Validate
+
+on:
+  pull_request:
+    branches:
+      - master
+      - main
+    paths:
+      - 'terraform/**'
+      - '.github/workflows/validate.yml'
+
+jobs:
+  validate:
+    name: Terraform Validate
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        phase: ['00-iam', '01-networking', '02-kubernetes']
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.5.0
+      
+      - name: Terraform Format Check
+        working-directory: terraform/${{ matrix.phase }}
+        run: terraform fmt -check -recursive
+      
+      - name: Terraform Init
+        working-directory: terraform/${{ matrix.phase }}
+        run: terraform init -backend=false
+      
+      - name: Terraform Validate
+        working-directory: terraform/${{ matrix.phase }}
+        run: terraform validate
+      
+      - name: Run tflint
+        uses: terraform-linters/setup-tflint@v4
+        with:
+          tflint_version: latest
+      
+      - name: Init tflint
+        working-directory: terraform/${{ matrix.phase }}
+        run: tflint --init
+      
+      - name: Run tflint
+        working-directory: terraform/${{ matrix.phase }}
+        run: tflint -f compact
