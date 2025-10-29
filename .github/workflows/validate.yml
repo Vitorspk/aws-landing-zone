@@ -7,7 +7,21 @@ on:
       - main
     paths:
       - 'terraform/**'
-      - '.github/workflows/validate.yml'
+      - '.github/workflows/**'
+      - 'scripts/**'
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to validate'
+        required: false
+        default: 'master'
+  push:
+    branches:
+      - master
+      - main
+    paths:
+      - 'terraform/**'
+      - '.github/workflows/**'
 
 jobs:
   validate:
