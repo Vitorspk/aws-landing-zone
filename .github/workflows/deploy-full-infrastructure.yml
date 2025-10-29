@@ -49,7 +49,7 @@ jobs:
       
       - name: Terraform Init
         working-directory: terraform/00-iam
-        run: terraform init
+        run: terraform init -backend-config="region=${{ secrets.AWS_DEFAULT_REGION }}"
       
       - name: Terraform Plan
         working-directory: terraform/00-iam
@@ -84,7 +84,7 @@ jobs:
       
       - name: Terraform Init
         working-directory: terraform/01-networking
-        run: terraform init
+        run: terraform init -backend-config="region=${{ secrets.AWS_DEFAULT_REGION }}"
       
       - name: Terraform Plan
         working-directory: terraform/01-networking
@@ -128,7 +128,7 @@ jobs:
       
       - name: Terraform Init
         working-directory: terraform/02-kubernetes
-        run: terraform init
+        run: terraform init -backend-config="region=${{ secrets.AWS_DEFAULT_REGION }}"
       
       - name: Terraform Plan
         working-directory: terraform/02-kubernetes
@@ -187,19 +187,19 @@ jobs:
       - name: Destroy Kubernetes
         working-directory: terraform/02-kubernetes
         run: |
-          terraform init
+          terraform init -backend-config="region=${{ secrets.AWS_DEFAULT_REGION }}"
           terraform destroy -var="region=${{ secrets.AWS_DEFAULT_REGION }}" -var="deploy_clusters=${{ github.event.inputs.clusters_to_deploy }}" -auto-approve
       
       - name: Destroy Networking
         if: github.event.inputs.clusters_to_deploy == 'all'
         working-directory: terraform/01-networking
         run: |
-          terraform init
+          terraform init -backend-config="region=${{ secrets.AWS_DEFAULT_REGION }}"
           terraform destroy -var="region=${{ secrets.AWS_DEFAULT_REGION }}" -auto-approve
       
       - name: Destroy IAM
         if: github.event.inputs.clusters_to_deploy == 'all'
         working-directory: terraform/00-iam
         run: |
-          terraform init
+          terraform init -backend-config="region=${{ secrets.AWS_DEFAULT_REGION }}"
           terraform destroy -var="region=${{ secrets.AWS_DEFAULT_REGION }}" -auto-approve
