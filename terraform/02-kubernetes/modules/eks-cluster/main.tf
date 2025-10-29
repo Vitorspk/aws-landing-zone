@@ -279,4 +279,8 @@ resource "aws_cloudwatch_log_group" "cluster" {
       Cluster     = var.cluster_name
     }
   )
+
+  lifecycle {
+    ignore_changes = [name]
+  }
 }

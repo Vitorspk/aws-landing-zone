@@ -152,6 +152,38 @@ jobs:
         with:
           version: 'latest'
       
+      - name: Cleanup Existing EKS Log Groups (if any)
+        run: |
+          echo "Checking for existing EKS CloudWatch Log Groups..."
+          
+          # List of possible log groups
+          LOG_GROUPS=(
+            "/aws/eks/eks-dev/cluster"
+            "/aws/eks/eks-stg/cluster"
+            "/aws/eks/eks-prd/cluster"
+            "/aws/eks/eks-sdx/cluster"
+          )
+          
+          for LOG_GROUP in "${LOG_GROUPS[@]}"; do
+            if aws logs describe-log-groups \
+              --log-group-name-prefix "$LOG_GROUP" \
+              --region ${{ secrets.AWS_DEFAULT_REGION }} \
+              --query "logGroups[?logGroupName=='$LOG_GROUP'].logGroupName" \
+              --output text 2>/dev/null | grep -q "$LOG_GROUP"; then
+              
+              echo "Found existing log group: $LOG_GROUP"
+              echo "Deleting to allow Terraform to manage it..."
+              
+              aws logs delete-log-group \
+                --log-group-name "$LOG_GROUP" \
+                --region ${{ secrets.AWS_DEFAULT_REGION }} || true
+              
+              echo "✓ Log group deleted: $LOG_GROUP"
+            fi
+          done
+          
+          echo "✓ Cleanup completed"
+      
       - name: Terraform Init
         working-directory: terraform/02-kubernetes
         run: terraform init -backend-config="region=${{ secrets.AWS_DEFAULT_REGION }}"
