@@ -29,6 +29,24 @@ data "tls_certificate" "cluster" {
 }
 
 # ==============================================================================
+# CLOUDWATCH LOG GROUP (must be created BEFORE EKS cluster)
+# ==============================================================================
+
+resource "aws_cloudwatch_log_group" "cluster" {
+  name              = "/aws/eks/${var.cluster_name}/cluster"
+  retention_in_days = var.cloudwatch_log_retention_days
+
+  tags = merge(
+    var.tags,
+    {
+      Name        = "${var.cluster_name}-logs"
+      Environment = var.environment
+      Cluster     = var.cluster_name
+    }
+  )
+}
+
+# ==============================================================================
 # EKS CLUSTER
 # ==============================================================================
 
@@ -68,7 +86,8 @@ resource "aws_eks_cluster" "main" {
   )
 
   depends_on = [
-    var.cluster_role_arn
+    var.cluster_role_arn,
+    aws_cloudwatch_log_group.cluster  # Ensure log group exists first
   ]
 }
 
@@ -260,27 +279,5 @@ resource "aws_eks_node_group" "main" {
   lifecycle {
     create_before_destroy = true
     ignore_changes        = [scaling_config[0].desired_size]
-  }
-}
-
-# ==============================================================================
-# CLOUDWATCH LOG GROUP
-# ==============================================================================
-
-resource "aws_cloudwatch_log_group" "cluster" {
-  name              = "/aws/eks/${var.cluster_name}/cluster"
-  retention_in_days = var.cloudwatch_log_retention_days
-
-  tags = merge(
-    var.tags,
-    {
-      Name        = "${var.cluster_name}-logs"
-      Environment = var.environment
-      Cluster     = var.cluster_name
-    }
-  )
-
-  lifecycle {
-    ignore_changes = [name]
   }
 }
