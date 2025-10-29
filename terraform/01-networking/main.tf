@@ -58,7 +58,7 @@ resource "aws_eip" "nat" {
 
 resource "aws_subnet" "public" {
   for_each = { for idx, az in local.availability_zones : az => {
-    cidr_block = cidrsubnet(var.vpc_cidr, 4, idx + 12)  # 192.168.192.0/20, 192.168.208.0/20
+    cidr_block = cidrsubnet(var.vpc_cidr, 4, idx + 12) # 192.168.192.0/20, 192.168.208.0/20
     az         = az
   } }
 

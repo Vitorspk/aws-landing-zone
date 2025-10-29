@@ -33,10 +33,8 @@ data "terraform_remote_state" "iam" {
 # ==============================================================================
 
 locals {
-  vpc_id                         = data.terraform_remote_state.networking.outputs.vpc_id
   private_subnet_ids_by_env      = data.terraform_remote_state.networking.outputs.private_subnet_ids_by_env
   eks_cluster_security_group_ids = data.terraform_remote_state.networking.outputs.eks_cluster_security_group_ids
-  eks_nodes_security_group_ids   = data.terraform_remote_state.networking.outputs.eks_nodes_security_group_ids
 
   eks_cluster_role_arns     = data.terraform_remote_state.iam.outputs.eks_cluster_role_arns
   eks_node_group_role_arns  = data.terraform_remote_state.iam.outputs.eks_node_group_role_arns
