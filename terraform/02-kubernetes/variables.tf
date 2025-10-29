@@ -20,7 +20,7 @@ variable "deploy_clusters" {
 locals {
   # Parse deploy_clusters string into a set
   clusters_to_deploy = var.deploy_clusters == "all" ? toset(["dev", "stg", "prd", "sdx"]) : toset(split(",", var.deploy_clusters))
-  
+
   # Create boolean map for each cluster
   deploy_cluster_map = {
     dev = contains(local.clusters_to_deploy, "dev")
@@ -43,14 +43,14 @@ variable "kubernetes_version" {
 variable "clusters" {
   description = "EKS clusters configuration"
   type = map(object({
-    name                       = string
-    node_group_name            = string
-    node_group_desired_size    = number
-    node_group_min_size        = number
-    node_group_max_size        = number
-    node_group_instance_types  = list(string)
-    node_group_capacity_type   = string
-    node_group_disk_size       = number
+    name                      = string
+    node_group_name           = string
+    node_group_desired_size   = number
+    node_group_min_size       = number
+    node_group_max_size       = number
+    node_group_instance_types = list(string)
+    node_group_capacity_type  = string
+    node_group_disk_size      = number
   }))
   default = {
     dev = {
