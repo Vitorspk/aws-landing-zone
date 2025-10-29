@@ -1,79 +1,175 @@
-.PHONY: help fmt init-iam init-networking init-kubernetes plan-iam plan-networking plan-kubernetes apply-iam apply-networking apply-kubernetes deploy-ingress destroy-all
+.PHONY: help init plan apply destroy cleanup reset validate format
 
-# Get region from environment variable or use default
-AWS_REGION ?= $(shell echo $$AWS_DEFAULT_REGION)
-ifeq ($(AWS_REGION),)
-	AWS_REGION = sa-east-1
-endif
+# ==============================================================================
+# AWS LANDING ZONE - MAKEFILE
+# ==============================================================================
 
-help:
-	@echo "AWS Landing Zone - Makefile"
+REGION ?= sa-east-1
+CLUSTERS ?= all
+
+help: ## Show this help message
+	@echo "AWS Landing Zone - Available Commands:"
 	@echo ""
-	@echo "Current AWS Region: $(AWS_REGION)"
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
 	@echo ""
-	@echo "Available targets:"
-	@echo "  fmt                - Format all Terraform files"
-	@echo "  init-iam           - Initialize IAM Terraform"
-	@echo "  init-networking    - Initialize Networking Terraform"
-	@echo "  init-kubernetes    - Initialize Kubernetes Terraform"
-	@echo "  plan-iam           - Plan IAM changes"
-	@echo "  plan-networking    - Plan Networking changes"
-	@echo "  plan-kubernetes    - Plan Kubernetes changes"
-	@echo "  apply-iam          - Apply IAM changes"
-	@echo "  apply-networking   - Apply Networking changes"
-	@echo "  apply-kubernetes   - Apply Kubernetes changes"
-	@echo "  deploy-ingress     - Deploy NGINX Ingress Controllers to all clusters"
-	@echo "  destroy-all        - Destroy all infrastructure (use with caution!)"
+
+# ==============================================================================
+# PREREQUISITES
+# ==============================================================================
+
+check: ## Check prerequisites (AWS CLI, credentials, backend)
+	@chmod +x scripts/check-prerequisites.sh
+	@./scripts/check-prerequisites.sh
+
+setup-backend: ## Setup S3 bucket and DynamoDB table
+	@chmod +x scripts/setup-backend.sh
+	@./scripts/setup-backend.sh
+
+# ==============================================================================
+# CLEANUP
+# ==============================================================================
+
+cleanup: ## Cleanup conflicting CloudWatch log groups and K8s jobs
+	@chmod +x scripts/cleanup-resources.sh
+	@./scripts/cleanup-resources.sh
+
+reset: ## Complete reset - destroy all infrastructure
+	@chmod +x scripts/complete-reset.sh
+	@./scripts/complete-reset.sh
+
+cleanup-k8s: ## Cleanup Kubernetes jobs only
+	@chmod +x scripts/cleanup-k8s-jobs.sh
+	@./scripts/cleanup-k8s-jobs.sh
+
+# ==============================================================================
+# TERRAFORM OPERATIONS - LOCAL
+# ==============================================================================
+
+init: ## Initialize all Terraform phases
+	@echo "Initializing Phase 0 - IAM..."
+	@cd terraform/00-iam && terraform init -backend-config="region=$(REGION)"
 	@echo ""
-	@echo "Set custom region: export AWS_DEFAULT_REGION=us-east-1"
+	@echo "Initializing Phase 1 - Networking..."
+	@cd terraform/01-networking && terraform init -backend-config="region=$(REGION)"
+	@echo ""
+	@echo "Initializing Phase 2 - Kubernetes..."
+	@cd terraform/02-kubernetes && terraform init -backend-config="region=$(REGION)"
+	@echo ""
+	@echo "✅ All phases initialized!"
 
-fmt:
-	@echo "Formatting all Terraform files..."
-	terraform fmt -recursive terraform/00-iam/
-	terraform fmt -recursive terraform/01-networking/
-	terraform fmt -recursive terraform/02-kubernetes/
-	@echo "✅ All files formatted!"
+plan: ## Run terraform plan for all phases
+	@echo "Planning Phase 0 - IAM..."
+	@cd terraform/00-iam && terraform plan -var="region=$(REGION)"
+	@echo ""
+	@echo "Planning Phase 1 - Networking..."
+	@cd terraform/01-networking && terraform plan -var="region=$(REGION)"
+	@echo ""
+	@echo "Planning Phase 2 - Kubernetes..."
+	@cd terraform/02-kubernetes && terraform plan -var="region=$(REGION)" -var="deploy_clusters=$(CLUSTERS)"
+	@echo ""
+	@echo "✅ Planning completed!"
 
-init-iam:
-	cd terraform/00-iam && terraform init -backend-config="region=$(AWS_REGION)"
+apply-iam: ## Apply Phase 0 - IAM
+	@cd terraform/00-iam && \
+		terraform init -backend-config="region=$(REGION)" && \
+		terraform apply -var="region=$(REGION)" -auto-approve
 
-init-networking:
-	cd terraform/01-networking && terraform init -backend-config="region=$(AWS_REGION)"
+apply-networking: ## Apply Phase 1 - Networking
+	@cd terraform/01-networking && \
+		terraform init -backend-config="region=$(REGION)" && \
+		terraform apply -var="region=$(REGION)" -auto-approve
 
-init-kubernetes:
-	cd terraform/02-kubernetes && terraform init -backend-config="region=$(AWS_REGION)"
+apply-kubernetes: ## Apply Phase 2 - Kubernetes
+	@cd terraform/02-kubernetes && \
+		terraform init -backend-config="region=$(REGION)" && \
+		terraform apply -var="region=$(REGION)" -var="deploy_clusters=$(CLUSTERS)" -auto-approve
 
-plan-iam:
-	cd terraform/00-iam && terraform plan -var="region=$(AWS_REGION)"
+apply-all: cleanup apply-iam apply-networking apply-kubernetes ## Apply all phases sequentially with cleanup
 
-plan-networking:
-	cd terraform/01-networking && terraform plan -var="region=$(AWS_REGION)"
+# ==============================================================================
+# DESTROY
+# ==============================================================================
 
-plan-kubernetes:
-	cd terraform/02-kubernetes && terraform plan -var="region=$(AWS_REGION)"
+destroy-kubernetes: ## Destroy Phase 2 - Kubernetes
+	@cd terraform/02-kubernetes && \
+		terraform init -backend-config="region=$(REGION)" && \
+		terraform destroy -var="region=$(REGION)" -var="deploy_clusters=$(CLUSTERS)" -auto-approve
 
-apply-iam:
-	cd terraform/00-iam && terraform apply -var="region=$(AWS_REGION)"
+destroy-networking: ## Destroy Phase 1 - Networking
+	@cd terraform/01-networking && \
+		terraform init -backend-config="region=$(REGION)" && \
+		terraform destroy -var="region=$(REGION)" -auto-approve
 
-apply-networking:
-	cd terraform/01-networking && terraform apply -var="region=$(AWS_REGION)"
+destroy-iam: ## Destroy Phase 0 - IAM
+	@cd terraform/00-iam && \
+		terraform init -backend-config="region=$(REGION)" && \
+		terraform destroy -var="region=$(REGION)" -auto-approve
 
-apply-kubernetes:
-	cd terraform/02-kubernetes && terraform apply -var="region=$(AWS_REGION)"
+destroy-all: destroy-kubernetes destroy-networking destroy-iam cleanup ## Destroy all phases in reverse order
 
-deploy-ingress:
-	@echo "Deploying NGINX Ingress Controllers to all clusters..."
-	@chmod +x scripts/deploy-ingress-controllers.sh
-	@./scripts/deploy-ingress-controllers.sh eks-dev $(AWS_REGION)
-	@./scripts/deploy-ingress-controllers.sh eks-stg $(AWS_REGION)
-	@./scripts/deploy-ingress-controllers.sh eks-prd $(AWS_REGION)
-	@./scripts/deploy-ingress-controllers.sh eks-sdx $(AWS_REGION)
-	@echo "✅ NGINX Ingress Controllers deployed to all clusters!"
+# ==============================================================================
+# CODE QUALITY
+# ==============================================================================
 
-destroy-all:
-	@echo "⚠️  WARNING: This will destroy ALL infrastructure!"
-	@echo "Press Ctrl+C to cancel, or Enter to continue..."
-	@read confirm
-	cd terraform/02-kubernetes && terraform destroy -var="region=$(AWS_REGION)"
-	cd terraform/01-networking && terraform destroy -var="region=$(AWS_REGION)"
-	cd terraform/00-iam && terraform destroy -var="region=$(AWS_REGION)"
+format: ## Format all Terraform files
+	@chmod +x scripts/format-terraform.sh
+	@./scripts/format-terraform.sh
+
+validate: ## Validate all Terraform configurations
+	@echo "Validating Phase 0 - IAM..."
+	@cd terraform/00-iam && terraform init -backend=false && terraform validate
+	@echo ""
+	@echo "Validating Phase 1 - Networking..."
+	@cd terraform/01-networking && terraform init -backend=false && terraform validate
+	@echo ""
+	@echo "Validating Phase 2 - Kubernetes..."
+	@cd terraform/02-kubernetes && terraform init -backend=false && terraform validate
+	@echo ""
+	@echo "✅ All phases validated!"
+
+# ==============================================================================
+# UTILITIES
+# ==============================================================================
+
+outputs: ## Show outputs from all phases
+	@echo "=== Phase 0 - IAM Outputs ==="
+	@cd terraform/00-iam && terraform init -backend-config="region=$(REGION)" &>/dev/null && terraform output
+	@echo ""
+	@echo "=== Phase 1 - Networking Outputs ==="
+	@cd terraform/01-networking && terraform init -backend-config="region=$(REGION)" &>/dev/null && terraform output
+	@echo ""
+	@echo "=== Phase 2 - Kubernetes Outputs ==="
+	@cd terraform/02-kubernetes && terraform init -backend-config="region=$(REGION)" &>/dev/null && terraform output
+
+state-list: ## List all resources in Terraform state
+	@echo "=== IAM Resources ==="
+	@cd terraform/00-iam && terraform init -backend-config="region=$(REGION)" &>/dev/null && terraform state list
+	@echo ""
+	@echo "=== Networking Resources ==="
+	@cd terraform/01-networking && terraform init -backend-config="region=$(REGION)" &>/dev/null && terraform state list
+	@echo ""
+	@echo "=== Kubernetes Resources ==="
+	@cd terraform/02-kubernetes && terraform init -backend-config="region=$(REGION)" &>/dev/null && terraform state list
+
+clusters: ## List all EKS clusters
+	@aws eks list-clusters --region $(REGION)
+
+# ==============================================================================
+# EXAMPLES
+# ==============================================================================
+
+# Deploy only dev cluster:
+#   make apply-kubernetes CLUSTERS=dev
+#
+# Deploy dev and stg:
+#   make apply-kubernetes CLUSTERS=dev,stg
+#
+# Use different region:
+#   make apply-all REGION=us-east-1
+#
+# Check what will be created:
+#   make plan
+#
+# Complete reset and fresh deploy:
+#   make reset
+#   make apply-all
