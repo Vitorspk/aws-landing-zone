@@ -166,6 +166,32 @@ jobs:
         with:
           terraform_version: ${{ env.TF_VERSION }}
       
+      - name: Cleanup Existing Resources (if any)
+        working-directory: terraform/01-networking
+        run: |
+          echo "Checking for existing CloudWatch Log Groups..."
+          
+          # Check if log group exists and delete it
+          LOG_GROUP="/aws/vpc/shared-vpc/flow-logs"
+          
+          if aws logs describe-log-groups \
+            --log-group-name-prefix "$LOG_GROUP" \
+            --region ${{ secrets.AWS_DEFAULT_REGION }} \
+            --query "logGroups[?logGroupName=='$LOG_GROUP'].logGroupName" \
+            --output text 2>/dev/null | grep -q "$LOG_GROUP"; then
+            
+            echo "Found existing log group: $LOG_GROUP"
+            echo "Deleting to allow Terraform to manage it..."
+            
+            aws logs delete-log-group \
+              --log-group-name "$LOG_GROUP" \
+              --region ${{ secrets.AWS_DEFAULT_REGION }} || true
+            
+            echo "✓ Log group deleted successfully"
+          else
+            echo "✓ No conflicting log groups found"
+          fi
+      
       - name: Terraform Init
         working-directory: terraform/01-networking
         run: terraform init -backend-config="region=${{ secrets.AWS_DEFAULT_REGION }}"

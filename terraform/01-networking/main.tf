@@ -225,6 +225,10 @@ resource "aws_cloudwatch_log_group" "flow_logs" {
       Environment = "shared"
     }
   )
+
+  lifecycle {
+    ignore_changes = [name]
+  }
 }
 
 resource "aws_iam_role" "flow_logs" {
