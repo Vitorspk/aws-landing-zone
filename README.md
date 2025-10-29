@@ -40,17 +40,48 @@ Each phase can be deployed independently:
 # Phase 0: IAM
 cd terraform/00-iam
 terraform init
-terraform apply
+terraform apply -var="region=sa-east-1"
 
 # Phase 1: Networking
 cd terraform/01-networking
 terraform init
-terraform apply
+terraform apply -var="region=sa-east-1"
 
-# Phase 2: Kubernetes
+# Phase 2: Kubernetes - All clusters
 cd terraform/02-kubernetes
 terraform init
-terraform apply
+terraform apply -var="region=sa-east-1"
+
+# Or deploy specific clusters only:
+terraform apply -var="region=sa-east-1" -var="deploy_clusters=dev"
+terraform apply -var="region=sa-east-1" -var="deploy_clusters=dev,stg"
+terraform apply -var="region=sa-east-1" -var="deploy_clusters=prd"
+```
+
+### Selective Cluster Deployment
+
+You can choose which clusters to deploy using the `deploy_clusters` variable:
+
+```bash
+# Deploy only DEV cluster (~15-20 min, ~$220/month)
+terraform apply -var="region=sa-east-1" -var="deploy_clusters=dev"
+
+# Deploy DEV + STG (~30-40 min, ~$360/month)
+terraform apply -var="region=sa-east-1" -var="deploy_clusters=dev,stg"
+
+# Deploy DEV + STG + PRD (~50-60 min, ~$620/month)
+terraform apply -var="region=sa-east-1" -var="deploy_clusters=dev,stg,prd"
+
+# Deploy all clusters (~70-80 min, ~$750-850/month)
+terraform apply -var="region=sa-east-1" -var="deploy_clusters=all"
+# Or simply (all is the default):
+terraform apply -var="region=sa-east-1"
+
+# Deploy only production
+terraform apply -var="region=sa-east-1" -var="deploy_clusters=prd"
+
+# Deploy only sandbox for testing
+terraform apply -var="region=sa-east-1" -var="deploy_clusters=sdx"
 ```
 
 ### Automated Deployment via GitHub Actions
@@ -58,6 +89,10 @@ terraform apply
 Trigger the `deploy-full-infrastructure` workflow with:
 - **action**: `plan`, `apply`, or `destroy`
 - **clusters_to_deploy**: `all`, `dev`, `stg`, `prd`, or `sdx`
+
+**Note**: NGINX Ingress Controllers are automatically deployed after cluster creation.
+
+### Post-Deployment: Access Clusters
 
 ## Environments
 
@@ -73,12 +108,25 @@ Trigger the `deploy-full-infrastructure` workflow with:
 - ✅ Centralized IAM management
 - ✅ Reusable IAM Roles across phases
 - ✅ Private EKS clusters with IRSA (IAM Roles for Service Accounts)
-- ✅ AWS Load Balancer Controller support
-- ✅ Selective cluster deployment
+- ✅ NGINX Ingress Controllers (external + internal) auto-deployed
+- ✅ Selective cluster deployment (dev, stg, prd, sdx, or any combination)
 - ✅ Automated validation and security scanning
 - ✅ Multi-AZ deployment for high availability
+- ✅ Flexible region configuration via variables
 
-## State Management
+## Configuration
+
+### Region Configuration
+
+The AWS region is **configurable** and not hardcoded. You can set it in three ways:
+
+1. **GitHub Secrets** (for CI/CD): Set `AWS_DEFAULT_REGION` secret
+2. **Terraform variables**: Pass `-var="region=your-region"` or create `terraform.tfvars`
+3. **Environment variable**: Export `AWS_DEFAULT_REGION=your-region`
+
+Default region: `sa-east-1` (São Paulo)
+
+### State Management
 
 Terraform state stored in S3:
 - Bucket: `vschiavo-home-terraform-state`
@@ -102,6 +150,57 @@ Terraform state stored in S3:
 - VPC Flow Logs enabled
 - Encryption at rest and in transit
 - AWS Systems Manager Session Manager for secure access
+
+## NGINX Ingress Controllers
+
+NGINX Ingress Controllers are **automatically deployed** to each cluster after creation:
+
+- **External Ingress** (`nginx-external`):
+  - Namespace: `ingress-nginx`
+  - LoadBalancer: Internet-facing NLB
+  - Replicas: 2 (with HPA: 2-5)
+  - Use for: Public-facing applications
+
+- **Internal Ingress** (`nginx-internal`):
+  - Namespace: `ingress-nginx-internal`
+  - LoadBalancer: Internal NLB (VPC only)
+  - Replicas: 1
+  - Use for: Internal/private applications
+
+### Verify Installation
+
+```bash
+# Check external ingress
+kubectl get pods -n ingress-nginx
+kubectl get svc ingress-nginx-controller -n ingress-nginx
+
+# Check internal ingress
+kubectl get pods -n ingress-nginx-internal
+kubectl get svc ingress-nginx-internal-controller -n ingress-nginx-internal
+```
+
+### Usage Example
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: my-app
+  annotations:
+    kubernetes.io/ingress.class: nginx-external  # or nginx-internal
+spec:
+  rules:
+  - host: app.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: my-app
+            port:
+              number: 80
+```
 
 ## Compliance
 

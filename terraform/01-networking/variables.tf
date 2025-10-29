@@ -5,7 +5,6 @@
 variable "region" {
   description = "AWS region"
   type        = string
-  default     = "sa-east-1"
 }
 
 variable "vpc_name" {
@@ -17,13 +16,13 @@ variable "vpc_name" {
 variable "vpc_cidr" {
   description = "VPC CIDR block"
   type        = string
-  default     = "10.0.0.0/8"
+  default     = "192.168.0.0/16"
 }
 
 variable "availability_zones" {
-  description = "List of availability zones"
+  description = "List of availability zones (will be constructed from region)"
   type        = list(string)
-  default     = ["sa-east-1a", "sa-east-1b"]
+  default     = []
 }
 
 # ==============================================================================
@@ -37,16 +36,16 @@ variable "environments" {
   }))
   default = {
     dev = {
-      cidr_block = "10.10.0.0/16"
+      cidr_block = "192.168.0.0/20"
     }
     stg = {
-      cidr_block = "10.13.0.0/16"
+      cidr_block = "192.168.16.0/20"
     }
     prd = {
-      cidr_block = "10.16.0.0/16"
+      cidr_block = "192.168.32.0/20"
     }
     sdx = {
-      cidr_block = "10.19.0.0/16"
+      cidr_block = "192.168.48.0/20"
     }
   }
 }
@@ -90,4 +89,16 @@ variable "tags" {
     Team       = "platform"
     Repository = "aws-landing-zone"
   }
+}
+
+# ==============================================================================
+# LOCALS
+# ==============================================================================
+
+locals {
+  # Auto-detect availability zones from region if not provided
+  availability_zones = length(var.availability_zones) > 0 ? var.availability_zones : [
+    "${var.region}a",
+    "${var.region}b"
+  ]
 }

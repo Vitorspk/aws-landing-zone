@@ -11,8 +11,11 @@ terraform {
   backend "s3" {
     bucket         = "vschiavo-home-terraform-state"
     key            = "aws-landing-zone/kubernetes/terraform.tfstate"
-    region         = "sa-east-1"
     encrypt        = true
     dynamodb_table = "terraform-state-lock"
+    # Region will be set via:
+    # - AWS_DEFAULT_REGION environment variable
+    # - terraform init -backend-config="region=$AWS_DEFAULT_REGION"
+    # - AWS CLI default region
   }
 }

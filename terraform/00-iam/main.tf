@@ -21,7 +21,7 @@ provider "aws" {
 
 locals {
   environments = toset(["dev", "stg", "prd", "sdx"])
-  
+
   common_tags = {
     Phase      = "iam"
     Repository = "aws-landing-zone"

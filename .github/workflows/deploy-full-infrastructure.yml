@@ -12,18 +12,12 @@ on:
           - apply
           - destroy
       clusters_to_deploy:
-        description: 'Clusters to deploy'
+        description: 'Clusters to deploy (dev, dev,stg, dev,stg,prd, or all)'
         required: true
-        type: choice
-        options:
-          - all
-          - dev
-          - stg
-          - prd
-          - sdx
+        default: 'all'
+        type: string
 
 env:
-  AWS_REGION: sa-east-1
   TF_VERSION: 1.5.0
 
 jobs:
@@ -41,7 +35,7 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
+          aws-region: ${{ secrets.AWS_DEFAULT_REGION }}
       
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -54,7 +48,7 @@ jobs:
       
       - name: Terraform Plan
         working-directory: terraform/00-iam
-        run: terraform plan -out=tfplan
+        run: terraform plan -var="region=${{ secrets.AWS_DEFAULT_REGION }}" -out=tfplan
       
       - name: Terraform Apply
         if: github.event.inputs.action == 'apply'
@@ -76,7 +70,7 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
+          aws-region: ${{ secrets.AWS_DEFAULT_REGION }}
       
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -89,7 +83,7 @@ jobs:
       
       - name: Terraform Plan
         working-directory: terraform/01-networking
-        run: terraform plan -out=tfplan
+        run: terraform plan -var="region=${{ secrets.AWS_DEFAULT_REGION }}" -out=tfplan
       
       - name: Terraform Apply
         if: github.event.inputs.action == 'apply'
@@ -111,12 +105,17 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
+          aws-region: ${{ secrets.AWS_DEFAULT_REGION }}
       
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
+      
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: 'latest'
       
       - name: Terraform Init
         working-directory: terraform/02-kubernetes
@@ -124,18 +123,36 @@ jobs:
       
       - name: Terraform Plan
         working-directory: terraform/02-kubernetes
-        run: |
-          if [ "${{ github.event.inputs.clusters_to_deploy }}" != "all" ]; then
-            terraform plan -out=tfplan \
-              -target=module.eks_${{ github.event.inputs.clusters_to_deploy }}
-          else
-            terraform plan -out=tfplan
-          fi
+        run: terraform plan -var="region=${{ secrets.AWS_DEFAULT_REGION }}" -var="deploy_clusters=${{ github.event.inputs.clusters_to_deploy }}" -out=tfplan
       
       - name: Terraform Apply
         if: github.event.inputs.action == 'apply'
         working-directory: terraform/02-kubernetes
         run: terraform apply -auto-approve tfplan
+      
+      - name: Deploy NGINX Ingress Controllers
+        if: github.event.inputs.action == 'apply'
+        env:
+          AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
+        run: |
+          chmod +x scripts/deploy-ingress-controllers.sh
+          
+          # Parse clusters from input (supports: dev, dev,stg, all)
+          CLUSTERS="${{ github.event.inputs.clusters_to_deploy }}"
+          
+          if [ "$CLUSTERS" == "all" ]; then
+            ./scripts/deploy-ingress-controllers.sh eks-dev ${{ secrets.AWS_DEFAULT_REGION }} || true
+            ./scripts/deploy-ingress-controllers.sh eks-stg ${{ secrets.AWS_DEFAULT_REGION }} || true
+            ./scripts/deploy-ingress-controllers.sh eks-prd ${{ secrets.AWS_DEFAULT_REGION }} || true
+            ./scripts/deploy-ingress-controllers.sh eks-sdx ${{ secrets.AWS_DEFAULT_REGION }} || true
+          else
+            # Split comma-separated list
+            IFS=',' read -ra CLUSTER_ARRAY <<< "$CLUSTERS"
+            for cluster in "${CLUSTER_ARRAY[@]}"; do
+              cluster=$(echo "$cluster" | xargs)  # trim whitespace
+              ./scripts/deploy-ingress-controllers.sh eks-$cluster ${{ secrets.AWS_DEFAULT_REGION }} || true
+            done
+          fi
 
   destroy:
     name: Destroy Infrastructure
@@ -151,7 +168,7 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
+          aws-region: ${{ secrets.AWS_DEFAULT_REGION }}
       
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -162,23 +179,18 @@ jobs:
         working-directory: terraform/02-kubernetes
         run: |
           terraform init
-          if [ "${{ github.event.inputs.clusters_to_deploy }}" != "all" ]; then
-            terraform destroy -auto-approve \
-              -target=module.eks_${{ github.event.inputs.clusters_to_deploy }}
-          else
-            terraform destroy -auto-approve
-          fi
+          terraform destroy -var="region=${{ secrets.AWS_DEFAULT_REGION }}" -var="deploy_clusters=${{ github.event.inputs.clusters_to_deploy }}" -auto-approve
       
       - name: Destroy Networking
         if: github.event.inputs.clusters_to_deploy == 'all'
         working-directory: terraform/01-networking
         run: |
           terraform init
-          terraform destroy -auto-approve
+          terraform destroy -var="region=${{ secrets.AWS_DEFAULT_REGION }}" -auto-approve
       
       - name: Destroy IAM
         if: github.event.inputs.clusters_to_deploy == 'all'
         working-directory: terraform/00-iam
         run: |
           terraform init
-          terraform destroy -auto-approve
+          terraform destroy -var="region=${{ secrets.AWS_DEFAULT_REGION }}" -auto-approve

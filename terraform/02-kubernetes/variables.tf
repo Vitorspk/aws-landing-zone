@@ -5,7 +5,29 @@
 variable "region" {
   description = "AWS region"
   type        = string
-  default     = "sa-east-1"
+}
+
+# ==============================================================================
+# CLUSTER SELECTION
+# ==============================================================================
+
+variable "deploy_clusters" {
+  description = "Comma-separated list of clusters to deploy (dev,stg,prd,sdx) or 'all' for all clusters"
+  type        = string
+  default     = "all"
+}
+
+locals {
+  # Parse deploy_clusters string into a set
+  clusters_to_deploy = var.deploy_clusters == "all" ? toset(["dev", "stg", "prd", "sdx"]) : toset(split(",", var.deploy_clusters))
+  
+  # Create boolean map for each cluster
+  deploy_cluster_map = {
+    dev = contains(local.clusters_to_deploy, "dev")
+    stg = contains(local.clusters_to_deploy, "stg")
+    prd = contains(local.clusters_to_deploy, "prd")
+    sdx = contains(local.clusters_to_deploy, "sdx")
+  }
 }
 
 # ==============================================================================

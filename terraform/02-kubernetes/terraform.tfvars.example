@@ -1,0 +1,23 @@
+# ==============================================================================
+# AWS REGION CONFIGURATION
+# ==============================================================================
+
+region = "sa-east-1"
+
+# ==============================================================================
+# CLUSTER SELECTION
+# ==============================================================================
+# Control which clusters to deploy
+# Set to false to skip cluster creation
+
+deploy_clusters = {
+  dev = true   # Deploy dev cluster
+  stg = true   # Deploy stg cluster
+  prd = true   # Deploy prd cluster
+  sdx = true   # Deploy sdx cluster
+}
+
+# Examples:
+# - Deploy only dev: deploy_clusters = { dev = true, stg = false, prd = false, sdx = false }
+# - Deploy dev + stg: deploy_clusters = { dev = true, stg = true, prd = false, sdx = false }
+# - Deploy all: deploy_clusters = { dev = true, stg = true, prd = true, sdx = true }

@@ -1,0 +1,14 @@
+# ==============================================================================
+# AWS REGION CONFIGURATION
+# ==============================================================================
+# This file shows example values for terraform variables
+# Create a terraform.tfvars file with your actual values
+
+# AWS Region - examples:
+# - us-east-1 (North Virginia)
+# - us-west-2 (Oregon)
+# - eu-west-1 (Ireland)
+# - sa-east-1 (São Paulo)
+# - ap-southeast-1 (Singapore)
+
+region = "sa-east-1"

@@ -37,7 +37,7 @@ resource "aws_internet_gateway" "main" {
 # ==============================================================================
 
 resource "aws_eip" "nat" {
-  for_each = toset(var.availability_zones)
+  for_each = toset(local.availability_zones)
 
   domain = "vpc"
 
@@ -57,8 +57,8 @@ resource "aws_eip" "nat" {
 # ==============================================================================
 
 resource "aws_subnet" "public" {
-  for_each = { for idx, az in var.availability_zones : az => {
-    cidr_block = cidrsubnet(var.vpc_cidr, 8, idx)
+  for_each = { for idx, az in local.availability_zones : az => {
+    cidr_block = cidrsubnet(var.vpc_cidr, 4, idx + 12)  # 192.168.192.0/20, 192.168.208.0/20
     az         = az
   } }
 
@@ -85,10 +85,10 @@ resource "aws_subnet" "public" {
 resource "aws_subnet" "private" {
   for_each = merge([
     for env in keys(var.environments) : {
-      for idx, az in var.availability_zones : "${env}-${az}" => {
+      for idx, az in local.availability_zones : "${env}-${az}" => {
         env        = env
         az         = az
-        cidr_block = cidrsubnet(var.environments[env].cidr_block, 3, idx)
+        cidr_block = cidrsubnet(var.environments[env].cidr_block, 1, idx)
       }
     }
   ]...)
@@ -101,10 +101,10 @@ resource "aws_subnet" "private" {
   tags = merge(
     var.tags,
     {
-      Name                              = "${var.vpc_name}-private-${each.value.env}-${each.value.az}"
-      Environment                       = each.value.env
-      Type                              = "private"
-      "kubernetes.io/role/internal-elb" = "1"
+      Name                                          = "${var.vpc_name}-private-${each.value.env}-${each.value.az}"
+      Environment                                   = each.value.env
+      Type                                          = "private"
+      "kubernetes.io/role/internal-elb"             = "1"
       "kubernetes.io/cluster/eks-${each.value.env}" = "shared"
     }
   )
@@ -115,7 +115,7 @@ resource "aws_subnet" "private" {
 # ==============================================================================
 
 resource "aws_nat_gateway" "main" {
-  for_each = toset(var.availability_zones)
+  for_each = toset(local.availability_zones)
 
   allocation_id = aws_eip.nat[each.key].id
   subnet_id     = aws_subnet.public[each.key].id
@@ -165,7 +165,7 @@ resource "aws_route_table_association" "public" {
 # ==============================================================================
 
 resource "aws_route_table" "private" {
-  for_each = toset(var.availability_zones)
+  for_each = toset(local.availability_zones)
 
   vpc_id = aws_vpc.main.id
 
@@ -188,7 +188,7 @@ resource "aws_route_table_association" "private" {
   for_each = aws_subnet.private
 
   subnet_id      = each.value.id
-  route_table_id = aws_route_table.private[split("-", each.key)[1]].id
+  route_table_id = aws_route_table.private[each.value.availability_zone].id
 }
 
 # ==============================================================================
@@ -312,7 +312,11 @@ resource "aws_vpc_endpoint" "ecr_api" {
   vpc_endpoint_type   = "Interface"
   private_dns_enabled = true
 
-  subnet_ids = [for subnet in aws_subnet.private : subnet.id]
+  # Use only one subnet per AZ (dev subnets)
+  subnet_ids = [
+    for az in local.availability_zones :
+    aws_subnet.private["dev-${az}"].id
+  ]
 
   security_group_ids = [aws_security_group.vpc_endpoints[0].id]
 
@@ -334,7 +338,11 @@ resource "aws_vpc_endpoint" "ecr_dkr" {
   vpc_endpoint_type   = "Interface"
   private_dns_enabled = true
 
-  subnet_ids = [for subnet in aws_subnet.private : subnet.id]
+  # Use only one subnet per AZ (dev subnets)
+  subnet_ids = [
+    for az in local.availability_zones :
+    aws_subnet.private["dev-${az}"].id
+  ]
 
   security_group_ids = [aws_security_group.vpc_endpoints[0].id]
 
@@ -356,7 +364,11 @@ resource "aws_vpc_endpoint" "ec2" {
   vpc_endpoint_type   = "Interface"
   private_dns_enabled = true
 
-  subnet_ids = [for subnet in aws_subnet.private : subnet.id]
+  # Use only one subnet per AZ (dev subnets)
+  subnet_ids = [
+    for az in local.availability_zones :
+    aws_subnet.private["dev-${az}"].id
+  ]
 
   security_group_ids = [aws_security_group.vpc_endpoints[0].id]
 
@@ -378,7 +390,11 @@ resource "aws_vpc_endpoint" "sts" {
   vpc_endpoint_type   = "Interface"
   private_dns_enabled = true
 
-  subnet_ids = [for subnet in aws_subnet.private : subnet.id]
+  # Use only one subnet per AZ (dev subnets)
+  subnet_ids = [
+    for az in local.availability_zones :
+    aws_subnet.private["dev-${az}"].id
+  ]
 
   security_group_ids = [aws_security_group.vpc_endpoints[0].id]
 

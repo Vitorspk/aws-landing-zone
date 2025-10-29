@@ -62,9 +62,9 @@ resource "aws_security_group" "eks_nodes" {
   tags = merge(
     var.tags,
     {
-      Name                                      = "eks-${each.key}-nodes-sg"
-      Environment                               = each.key
-      Cluster                                   = "eks-${each.key}"
+      Name                                    = "eks-${each.key}-nodes-sg"
+      Environment                             = each.key
+      Cluster                                 = "eks-${each.key}"
       "kubernetes.io/cluster/eks-${each.key}" = "owned"
     }
   )
