@@ -39,6 +39,11 @@ echo "3. Creating namespaces..."
 kubectl create namespace ingress-nginx --dry-run=client -o yaml | kubectl apply -f -
 kubectl create namespace ingress-nginx-internal --dry-run=client -o yaml | kubectl apply -f -
 
+# Cleanup existing jobs to avoid AlreadyExists errors
+echo "3.5. Cleaning up existing admission jobs..."
+kubectl delete job ingress-nginx-admission-create ingress-nginx-admission-patch -n ingress-nginx --ignore-not-found=true 2>/dev/null || true
+kubectl delete job ingress-nginx-internal-admission-create ingress-nginx-internal-admission-patch -n ingress-nginx-internal --ignore-not-found=true 2>/dev/null || true
+
 # Deploy external ingress
 echo "4. Deploying external NGINX Ingress Controller..."
 kubectl apply -f "$REPO_ROOT/manifests/eks-ingress-nginx-1.13.0-external.yaml"
