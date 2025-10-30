@@ -17,6 +17,7 @@ on:
         required: true
         type: choice
         options:
+          - init
           - plan
           - apply
       clusters:
@@ -109,7 +110,7 @@ jobs:
         run: terraform init -backend-config="region=${{ env.AWS_REGION }}"
       
       - name: "Phase 0: IAM - Plan"
-        if: (github.event.inputs.phase == 'all' || github.event.inputs.phase == 'iam')
+        if: (github.event.inputs.phase == 'all' || github.event.inputs.phase == 'iam') && github.event.inputs.action != 'init'
         working-directory: terraform/00-iam
         run: terraform plan -var="region=${{ env.AWS_REGION }}" -out=tfplan
       
@@ -128,7 +129,7 @@ jobs:
         run: terraform init -backend-config="region=${{ env.AWS_REGION }}"
       
       - name: "Phase 1: Networking - Plan"
-        if: (github.event.inputs.phase == 'all' || github.event.inputs.phase == 'networking')
+        if: (github.event.inputs.phase == 'all' || github.event.inputs.phase == 'networking') && github.event.inputs.action != 'init'
         working-directory: terraform/01-networking
         run: terraform plan -var="region=${{ env.AWS_REGION }}" -out=tfplan
       
@@ -147,7 +148,7 @@ jobs:
         run: terraform init -backend-config="region=${{ env.AWS_REGION }}"
       
       - name: "Phase 2: Kubernetes - Plan"
-        if: (github.event.inputs.phase == 'all' || github.event.inputs.phase == 'kubernetes')
+        if: (github.event.inputs.phase == 'all' || github.event.inputs.phase == 'kubernetes') && github.event.inputs.action != 'init'
         working-directory: terraform/02-kubernetes
         run: |
           terraform plan \
@@ -178,8 +179,23 @@ jobs:
           echo "Region: ${{ env.AWS_REGION }}"
           echo ""
           
-          if [ "${{ job.status }}" == "success" ]; then
-            echo "✅ Deployment completed successfully!"
+          if [ "${{ github.event.inputs.action }}" == "init" ]; then
+            echo "✅ Terraform initialized successfully!"
+            echo ""
+            echo "Next steps:"
+            echo "  1. Run with action: plan (to see what will be created)"
+            echo "  2. Run with action: apply (to create resources)"
+          elif [ "${{ job.status }}" == "success" ]; then
+            if [ "${{ github.event.inputs.action }}" == "plan" ]; then
+              echo "✅ Planning completed successfully!"
+              echo ""
+              echo "Review the plan above. If OK:"
+              echo "  Run workflow again with action: apply"
+            else
+              echo "✅ Deployment completed successfully!"
+              echo ""
+              echo "Resources are now live in AWS."
+            fi
           else
             echo "❌ Deployment failed. Check logs above."
           fi
