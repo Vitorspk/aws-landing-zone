@@ -100,7 +100,7 @@ jobs:
             exit 0
           fi
           
-          # Get ALL ENIs (not just available ones)
+          # Get ALL ENIs
           aws ec2 describe-network-interfaces \
             --filters "Name=vpc-id,Values=$VPC_ID" \
             --query "NetworkInterfaces[].NetworkInterfaceId" \
@@ -192,5 +192,87 @@ jobs:
         working-directory: terraform/02-kubernetes
         run: |
           echo "🗑️  Destroying Phase 2 - Kubernetes..."
-          terraform init -backend-config=\"region=${{ env.AWS_REGION }}\"
-          terraform destroy \\\n            -var=\"region=${{ env.AWS_REGION }}\" \\\n            -var=\"deploy_clusters=all\" \\\n            -auto-approve || echo \"⚠️  Some resources may not exist\"\n          echo \"✅ Phase 2 destroyed\"\n      \n      - name: Wait for AWS cleanup\n        run: |\n          echo \"⏳ Waiting 60s for AWS to cleanup resources...\"\n          sleep 60\n      \n      - name: Destroy Phase 1 - Networking\n        if: github.event.inputs.scope == 'all'\n        working-directory: terraform/01-networking\n        run: |\n          echo \"🗑️  Destroying Phase 1 - Networking...\"\n          terraform init -backend-config=\"region=${{ env.AWS_REGION }}\"\n          terraform destroy \\\n            -var=\"region=${{ env.AWS_REGION }}\" \\\n            -auto-approve || echo \"⚠️  Some resources may not exist\"\n          echo \"✅ Phase 1 destroyed\"\n      \n      - name: Destroy Phase 0 - IAM\n        if: github.event.inputs.scope == 'all'\n        working-directory: terraform/00-iam\n        run: |\n          echo \"🗑️  Destroying Phase 0 - IAM...\"\n          terraform init -backend-config=\"region=${{ env.AWS_REGION }}\"\n          terraform destroy \\\n            -var=\"region=${{ env.AWS_REGION }}\" \\\n            -auto-approve || echo \"⚠️  Some resources may not exist\"\n          echo \"✅ Phase 0 destroyed\"\n      \n      # ==============================================================================\n      # POST-DESTROY CLEANUP\n      # ==============================================================================\n      \n      - name: Delete CloudWatch Log Groups\n        run: |\n          echo \"🧹 Final cleanup: Deleting CloudWatch Log Groups...\"\n          \n          LOG_GROUPS=(\n            \"/aws/vpc/shared-vpc/flow-logs\"\n            \"/aws/eks/eks-dev/cluster\"\n            \"/aws/eks/eks-stg/cluster\"\n            \"/aws/eks/eks-prd/cluster\"\n            \"/aws/eks/eks-sdx/cluster\"\n          )\n          \n          for LOG_GROUP in \"${LOG_GROUPS[@]}\"; do\n            aws logs delete-log-group \\\n              --log-group-name \"$LOG_GROUP\" \\\n              --region ${{ env.AWS_REGION }} 2>/dev/null || true\n          done\n          \n          echo \"  ✅ Log groups deleted\"\n      \n      - name: Clear Terraform Locks\n        run: |\n          echo \"🔓 Clearing any stuck Terraform locks...\"\n          \n          LOCKS=$(aws dynamodb scan \\\n            --table-name terraform-state-lock \\\n            --region ${{ env.AWS_REGION }} \\\n            --query \"Items[*].LockID.S\" \\\n            --output text 2>/dev/null || echo \"\")\n          \n          if [ ! -z \"$LOCKS\" ]; then\n            echo \"$LOCKS\" | tr '\t' '\n' | while read LOCK_ID; do\n              if [ ! -z \"$LOCK_ID\" ]; then\n                echo \"  Clearing lock: $LOCK_ID\"\n                aws dynamodb delete-item \\\n                  --table-name terraform-state-lock \\\n                  --key \"{\\\"LockID\\\":{\\\"S\\\":\\\"$LOCK_ID\\\"}}\" \\\n                  --region ${{ env.AWS_REGION }} || true\n              fi\n            done\n          fi\n          \n          echo \"  ✅ Locks cleared\"\n      \n      - name: Summary\n        run: |\n          echo \"\"\n          echo \"==========================================\"\n          echo \"✅ Destroy completed successfully!\"\n          echo \"==========================================\"\n          echo \"\"\n          echo \"All infrastructure has been destroyed.\"\n          echo \"\"\n
+          terraform init -backend-config="region=${{ env.AWS_REGION }}"
+          terraform destroy -var="region=${{ env.AWS_REGION }}" -var="deploy_clusters=all" -auto-approve || echo "⚠️  Some resources may not exist"
+          echo "✅ Phase 2 destroyed"
+      
+      - name: Wait for AWS cleanup
+        run: |
+          echo "⏳ Waiting 60s for AWS to cleanup resources..."
+          sleep 60
+      
+      - name: Destroy Phase 1 - Networking
+        if: github.event.inputs.scope == 'all'
+        working-directory: terraform/01-networking
+        run: |
+          echo "🗑️  Destroying Phase 1 - Networking..."
+          terraform init -backend-config="region=${{ env.AWS_REGION }}"
+          terraform destroy -var="region=${{ env.AWS_REGION }}" -auto-approve || echo "⚠️  Some resources may not exist"
+          echo "✅ Phase 1 destroyed"
+      
+      - name: Destroy Phase 0 - IAM
+        if: github.event.inputs.scope == 'all'
+        working-directory: terraform/00-iam
+        run: |
+          echo "🗑️  Destroying Phase 0 - IAM..."
+          terraform init -backend-config="region=${{ env.AWS_REGION }}"
+          terraform destroy -var="region=${{ env.AWS_REGION }}" -auto-approve || echo "⚠️  Some resources may not exist"
+          echo "✅ Phase 0 destroyed"
+      
+      # ==============================================================================
+      # POST-DESTROY CLEANUP
+      # ==============================================================================
+      
+      - name: Delete CloudWatch Log Groups
+        run: |
+          echo "🧹 Final cleanup: Deleting CloudWatch Log Groups..."
+          
+          LOG_GROUPS=(
+            "/aws/vpc/shared-vpc/flow-logs"
+            "/aws/eks/eks-dev/cluster"
+            "/aws/eks/eks-stg/cluster"
+            "/aws/eks/eks-prd/cluster"
+            "/aws/eks/eks-sdx/cluster"
+          )
+          
+          for LOG_GROUP in "${LOG_GROUPS[@]}"; do
+            aws logs delete-log-group \
+              --log-group-name "$LOG_GROUP" \
+              --region ${{ env.AWS_REGION }} 2>/dev/null || true
+          done
+          
+          echo "  ✅ Log groups deleted"
+      
+      - name: Clear Terraform Locks
+        run: |
+          echo "🔓 Clearing any stuck Terraform locks..."
+          
+          LOCKS=$(aws dynamodb scan \
+            --table-name terraform-state-lock \
+            --region ${{ env.AWS_REGION }} \
+            --query "Items[*].LockID.S" \
+            --output text 2>/dev/null || echo "")
+          
+          if [ ! -z "$LOCKS" ]; then
+            echo "$LOCKS" | tr '\t' '\n' | while read LOCK_ID; do
+              if [ ! -z "$LOCK_ID" ]; then
+                echo "  Clearing lock: $LOCK_ID"
+                aws dynamodb delete-item \
+                  --table-name terraform-state-lock \
+                  --key "{\"LockID\":{\"S\":\"$LOCK_ID\"}}" \
+                  --region ${{ env.AWS_REGION }} || true
+              fi
+            done
+          fi
+          
+          echo "  ✅ Locks cleared"
+      
+      - name: Summary
+        run: |
+          echo ""
+          echo "=========================================="
+          echo "✅ Destroy completed successfully!"
+          echo "=========================================="
+          echo ""
+          echo "All infrastructure has been destroyed."
+          echo ""
