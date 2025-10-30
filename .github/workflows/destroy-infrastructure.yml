@@ -1,0 +1,196 @@
+name: Destroy Infrastructure
+
+on:
+  workflow_dispatch:
+    inputs:
+      scope:
+        description: 'What to destroy'
+        required: true
+        type: choice
+        options:
+          - kubernetes-only
+          - all
+
+env:
+  TF_VERSION: 1.5.0
+  AWS_REGION: sa-east-1
+
+jobs:
+  destroy:
+    name: Destroy Infrastructure
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+      
+      # ==============================================================================
+      # CLEANUP BEFORE DESTROY
+      # ==============================================================================
+      
+      - name: Delete All Load Balancers
+        run: |
+          echo "🧹 Step 1: Deleting all Load Balancers..."
+          
+          VPC_ID=$(aws ec2 describe-vpcs \
+            --filters "Name=tag:Name,Values=shared-vpc" \
+            --query "Vpcs[0].VpcId" \
+            --output text \
+            --region ${{ env.AWS_REGION }} 2>/dev/null || echo "")
+          
+          if [ -z "$VPC_ID" ] || [ "$VPC_ID" == "None" ]; then
+            echo "  ✓ VPC not found (already deleted)"
+            exit 0
+          fi
+          
+          echo "  Found VPC: $VPC_ID"
+          
+          # Application Load Balancers
+          echo "  Checking Application Load Balancers..."
+          aws elbv2 describe-load-balancers \
+            --query "LoadBalancers[?VpcId=='$VPC_ID'].LoadBalancerArn" \
+            --output text \
+            --region ${{ env.AWS_REGION }} 2>/dev/null | tr '\t' '\n' | while read ARN; do
+            if [ ! -z "$ARN" ]; then
+              echo "    Deleting ALB: $ARN"
+              aws elbv2 delete-load-balancer --load-balancer-arn "$ARN" --region ${{ env.AWS_REGION }} || true
+            fi
+          done
+          
+          # Classic Load Balancers
+          echo "  Checking Classic Load Balancers..."
+          aws elb describe-load-balancers \
+            --query "LoadBalancerDescriptions[?VPCId=='$VPC_ID'].LoadBalancerName" \
+            --output text \
+            --region ${{ env.AWS_REGION }} 2>/dev/null | tr '\t' '\n' | while read NAME; do
+            if [ ! -z "$NAME" ]; then
+              echo "    Deleting CLB: $NAME"
+              aws elb delete-load-balancer --load-balancer-name "$NAME" --region ${{ env.AWS_REGION }} || true
+            fi
+          done
+          
+          echo "  ⏳ Waiting 120s for complete deletion..."
+          sleep 120
+          echo "  ✅ Load Balancers deleted"
+      
+      - name: Delete All Network Interfaces
+        run: |
+          echo "🧹 Step 2: Deleting all Network Interfaces..."
+          
+          VPC_ID=$(aws ec2 describe-vpcs \
+            --filters "Name=tag:Name,Values=shared-vpc" \
+            --query "Vpcs[0].VpcId" \
+            --output text \
+            --region ${{ env.AWS_REGION }} 2>/dev/null || echo "")
+          
+          if [ -z "$VPC_ID" ] || [ "$VPC_ID" == "None" ]; then
+            echo "  ✓ VPC not found"
+            exit 0
+          fi
+          
+          # Get ALL ENIs (not just available ones)
+          aws ec2 describe-network-interfaces \
+            --filters "Name=vpc-id,Values=$VPC_ID" \
+            --query "NetworkInterfaces[].NetworkInterfaceId" \
+            --output text \
+            --region ${{ env.AWS_REGION }} 2>/dev/null | tr '\t' '\n' | while read ENI; do
+            
+            if [ ! -z "$ENI" ]; then
+              # Check if attached
+              ATTACHMENT=$(aws ec2 describe-network-interfaces \
+                --network-interface-ids "$ENI" \
+                --query "NetworkInterfaces[0].Attachment.AttachmentId" \
+                --output text \
+                --region ${{ env.AWS_REGION }} 2>/dev/null || echo "")
+              
+              # Detach if needed
+              if [ ! -z "$ATTACHMENT" ] && [ "$ATTACHMENT" != "None" ]; then
+                echo "  Detaching ENI: $ENI"
+                aws ec2 detach-network-interface \
+                  --attachment-id "$ATTACHMENT" \
+                  --force \
+                  --region ${{ env.AWS_REGION }} || true
+                sleep 5
+              fi
+              
+              # Delete
+              echo "  Deleting ENI: $ENI"
+              aws ec2 delete-network-interface \
+                --network-interface-id "$ENI" \
+                --region ${{ env.AWS_REGION }} || true
+            fi
+          done
+          
+          echo "  ⏳ Waiting 60s for ENI cleanup..."
+          sleep 60
+          echo "  ✅ ENIs deleted"
+      
+      - name: Delete NAT Gateways
+        run: |
+          echo "🧹 Step 3: Deleting NAT Gateways..."
+          
+          VPC_ID=$(aws ec2 describe-vpcs \
+            --filters "Name=tag:Name,Values=shared-vpc" \
+            --query "Vpcs[0].VpcId" \
+            --output text \
+            --region ${{ env.AWS_REGION }} 2>/dev/null || echo "")
+          
+          if [ -z "$VPC_ID" ] || [ "$VPC_ID" == "None" ]; then
+            echo "  ✓ VPC not found"
+            exit 0
+          fi
+          
+          aws ec2 describe-nat-gateways \
+            --filter "Name=vpc-id,Values=$VPC_ID" \
+            --query "NatGateways[?State=='available'].NatGatewayId" \
+            --output text \
+            --region ${{ env.AWS_REGION }} 2>/dev/null | tr '\t' '\n' | while read NAT; do
+            if [ ! -z "$NAT" ]; then
+              echo "  Deleting NAT Gateway: $NAT"
+              aws ec2 delete-nat-gateway --nat-gateway-id "$NAT" --region ${{ env.AWS_REGION }} || true
+            fi
+          done
+          
+          echo "  ⏳ Waiting 60s for NAT Gateways to delete..."
+          sleep 60
+          echo "  ✅ NAT Gateways deleted"
+      
+      - name: Release Elastic IPs
+        run: |
+          echo "🧹 Step 4: Releasing Elastic IPs..."
+          
+          aws ec2 describe-addresses \
+            --filters "Name=domain,Values=vpc" \
+            --query "Addresses[?AssociationId==null].AllocationId" \
+            --output text \
+            --region ${{ env.AWS_REGION }} 2>/dev/null | tr '\t' '\n' | while read EIP; do
+            if [ ! -z "$EIP" ]; then
+              echo "  Releasing EIP: $EIP"
+              aws ec2 release-address --allocation-id "$EIP" --region ${{ env.AWS_REGION }} || true
+            fi
+          done
+          
+          echo "  ✅ EIPs released"
+      
+      # ==============================================================================
+      # TERRAFORM DESTROY
+      # ==============================================================================
+      
+      - name: Destroy Phase 2 - Kubernetes
+        working-directory: terraform/02-kubernetes
+        run: |
+          echo "🗑️  Destroying Phase 2 - Kubernetes..."
+          terraform init -backend-config=\"region=${{ env.AWS_REGION }}\"
+          terraform destroy \\\n            -var=\"region=${{ env.AWS_REGION }}\" \\\n            -var=\"deploy_clusters=all\" \\\n            -auto-approve || echo \"⚠️  Some resources may not exist\"\n          echo \"✅ Phase 2 destroyed\"\n      \n      - name: Wait for AWS cleanup\n        run: |\n          echo \"⏳ Waiting 60s for AWS to cleanup resources...\"\n          sleep 60\n      \n      - name: Destroy Phase 1 - Networking\n        if: github.event.inputs.scope == 'all'\n        working-directory: terraform/01-networking\n        run: |\n          echo \"🗑️  Destroying Phase 1 - Networking...\"\n          terraform init -backend-config=\"region=${{ env.AWS_REGION }}\"\n          terraform destroy \\\n            -var=\"region=${{ env.AWS_REGION }}\" \\\n            -auto-approve || echo \"⚠️  Some resources may not exist\"\n          echo \"✅ Phase 1 destroyed\"\n      \n      - name: Destroy Phase 0 - IAM\n        if: github.event.inputs.scope == 'all'\n        working-directory: terraform/00-iam\n        run: |\n          echo \"🗑️  Destroying Phase 0 - IAM...\"\n          terraform init -backend-config=\"region=${{ env.AWS_REGION }}\"\n          terraform destroy \\\n            -var=\"region=${{ env.AWS_REGION }}\" \\\n            -auto-approve || echo \"⚠️  Some resources may not exist\"\n          echo \"✅ Phase 0 destroyed\"\n      \n      # ==============================================================================\n      # POST-DESTROY CLEANUP\n      # ==============================================================================\n      \n      - name: Delete CloudWatch Log Groups\n        run: |\n          echo \"🧹 Final cleanup: Deleting CloudWatch Log Groups...\"\n          \n          LOG_GROUPS=(\n            \"/aws/vpc/shared-vpc/flow-logs\"\n            \"/aws/eks/eks-dev/cluster\"\n            \"/aws/eks/eks-stg/cluster\"\n            \"/aws/eks/eks-prd/cluster\"\n            \"/aws/eks/eks-sdx/cluster\"\n          )\n          \n          for LOG_GROUP in \"${LOG_GROUPS[@]}\"; do\n            aws logs delete-log-group \\\n              --log-group-name \"$LOG_GROUP\" \\\n              --region ${{ env.AWS_REGION }} 2>/dev/null || true\n          done\n          \n          echo \"  ✅ Log groups deleted\"\n      \n      - name: Clear Terraform Locks\n        run: |\n          echo \"🔓 Clearing any stuck Terraform locks...\"\n          \n          LOCKS=$(aws dynamodb scan \\\n            --table-name terraform-state-lock \\\n            --region ${{ env.AWS_REGION }} \\\n            --query \"Items[*].LockID.S\" \\\n            --output text 2>/dev/null || echo \"\")\n          \n          if [ ! -z \"$LOCKS\" ]; then\n            echo \"$LOCKS\" | tr '\t' '\n' | while read LOCK_ID; do\n              if [ ! -z \"$LOCK_ID\" ]; then\n                echo \"  Clearing lock: $LOCK_ID\"\n                aws dynamodb delete-item \\\n                  --table-name terraform-state-lock \\\n                  --key \"{\\\"LockID\\\":{\\\"S\\\":\\\"$LOCK_ID\\\"}}\" \\\n                  --region ${{ env.AWS_REGION }} || true\n              fi\n            done\n          fi\n          \n          echo \"  ✅ Locks cleared\"\n      \n      - name: Summary\n        run: |\n          echo \"\"\n          echo \"==========================================\"\n          echo \"✅ Destroy completed successfully!\"\n          echo \"==========================================\"\n          echo \"\"\n          echo \"All infrastructure has been destroyed.\"\n          echo \"\"\n

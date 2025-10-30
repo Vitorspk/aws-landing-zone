@@ -1,0 +1,171 @@
+name: Deploy Infrastructure (Simplified)
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy'
+        required: true
+        type: choice
+        options:
+          - dev
+          - stg
+          - prd
+          - sdx
+          - all
+      action:
+        description: 'Action to perform'
+        required: true
+        type: choice
+        options:
+          - plan
+          - apply
+          - destroy
+
+env:
+  TF_VERSION: 1.5.0
+  AWS_REGION: sa-east-1
+
+jobs:
+  deploy:
+    name: Deploy ${{ github.event.inputs.environment }}
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+      
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: 'latest'
+      
+      # ==============================================================================
+      # CLEANUP EXISTING RESOURCES
+      # ==============================================================================
+      
+      - name: Cleanup Conflicting CloudWatch Log Groups
+        if: github.event.inputs.action != 'destroy'
+        run: |
+          echo "🧹 Cleaning up existing CloudWatch Log Groups..."
+          
+          # VPC Flow Logs
+          aws logs delete-log-group \
+            --log-group-name "/aws/vpc/shared-vpc/flow-logs" \
+            --region ${{ env.AWS_REGION }} 2>/dev/null || true
+          
+          # EKS Cluster Logs
+          for env in dev stg prd sdx; do
+            aws logs delete-log-group \
+              --log-group-name "/aws/eks/eks-$env/cluster" \
+              --region ${{ env.AWS_REGION }} 2>/dev/null || true
+          done
+          
+          echo "✅ Cleanup completed"
+      
+      - name: Cleanup Kubernetes Jobs
+        if: github.event.inputs.action != 'destroy'
+        continue-on-error: true
+        run: |
+          echo "🧹 Cleaning up Kubernetes admission jobs..."
+          
+          for cluster in eks-dev eks-stg eks-prd eks-sdx; do
+            if aws eks describe-cluster --name $cluster --region ${{ env.AWS_REGION }} &>/dev/null; then
+              aws eks update-kubeconfig --name $cluster --region ${{ env.AWS_REGION }} || true
+              kubectl delete job --all -n ingress-nginx --ignore-not-found || true
+              kubectl delete job --all -n ingress-nginx-internal --ignore-not-found || true
+            fi
+          done
+          
+          echo "✅ K8s cleanup completed"
+      
+      # ==============================================================================
+      # PHASE 0 - IAM
+      # ==============================================================================
+      
+      - name: Phase 0 - IAM (Init)
+        working-directory: terraform/00-iam
+        run: terraform init -backend-config="region=${{ env.AWS_REGION }}"
+      
+      - name: Phase 0 - IAM (Plan)
+        if: github.event.inputs.action != 'destroy'
+        working-directory: terraform/00-iam
+        run: terraform plan -var="region=${{ env.AWS_REGION }}" -out=tfplan
+      
+      - name: Phase 0 - IAM (Apply)
+        if: github.event.inputs.action == 'apply'
+        working-directory: terraform/00-iam
+        run: terraform apply -auto-approve tfplan
+      
+      - name: Phase 0 - IAM (Destroy)
+        if: github.event.inputs.action == 'destroy' && github.event.inputs.environment == 'all'
+        working-directory: terraform/00-iam
+        run: terraform destroy -var="region=${{ env.AWS_REGION }}" -auto-approve
+      
+      # ==============================================================================
+      # PHASE 1 - NETWORKING
+      # ==============================================================================
+      
+      - name: Phase 1 - Networking (Init)
+        working-directory: terraform/01-networking
+        run: terraform init -backend-config="region=${{ env.AWS_REGION }}"
+      
+      - name: Phase 1 - Networking (Plan)
+        if: github.event.inputs.action != 'destroy'
+        working-directory: terraform/01-networking
+        run: terraform plan -var="region=${{ env.AWS_REGION }}" -out=tfplan
+      
+      - name: Phase 1 - Networking (Apply)
+        if: github.event.inputs.action == 'apply'
+        working-directory: terraform/01-networking
+        run: terraform apply -auto-approve tfplan
+      
+      - name: Phase 1 - Networking (Destroy)
+        if: github.event.inputs.action == 'destroy' && github.event.inputs.environment == 'all'
+        working-directory: terraform/01-networking
+        run: terraform destroy -var="region=${{ env.AWS_REGION }}" -auto-approve
+      
+      # ==============================================================================
+      # PHASE 2 - KUBERNETES
+      # ==============================================================================
+      
+      - name: Phase 2 - Kubernetes (Init)
+        working-directory: terraform/02-kubernetes
+        run: terraform init -backend-config="region=${{ env.AWS_REGION }}"
+      
+      - name: Phase 2 - Kubernetes (Plan)
+        if: github.event.inputs.action != 'destroy'
+        working-directory: terraform/02-kubernetes
+        run: |
+          CLUSTERS="${{ github.event.inputs.environment }}"
+          terraform plan \
+            -var="region=${{ env.AWS_REGION }}" \
+            -var="deploy_clusters=$CLUSTERS" \
+            -out=tfplan
+      
+      - name: Phase 2 - Kubernetes (Apply)
+        if: github.event.inputs.action == 'apply'
+        working-directory: terraform/02-kubernetes
+        run: terraform apply -auto-approve tfplan
+      
+      - name: Phase 2 - Kubernetes (Destroy)
+        if: github.event.inputs.action == 'destroy'
+        working-directory: terraform/02-kubernetes
+        run: |
+          CLUSTERS="${{ github.event.inputs.environment }}"
+          terraform destroy \
+            -var="region=${{ env.AWS_REGION }}" \
+            -var="deploy_clusters=$CLUSTERS" \
+            -auto-approve

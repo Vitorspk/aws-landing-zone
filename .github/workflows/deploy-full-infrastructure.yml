@@ -242,11 +242,105 @@ jobs:
         with:
           terraform_version: ${{ env.TF_VERSION }}
       
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: 'latest'
+      
+      - name: Delete Load Balancers (cleanup ENIs)
+        run: |
+          echo "🧹 Cleaning up Load Balancers to free ENIs..."
+          
+          # Get VPC ID
+          VPC_ID=$(aws ec2 describe-vpcs \
+            --filters "Name=tag:Name,Values=shared-vpc" \
+            --query "Vpcs[0].VpcId" \
+            --output text \
+            --region ${{ secrets.AWS_DEFAULT_REGION }} 2>/dev/null || echo "")
+          
+          if [ ! -z "$VPC_ID" ] && [ "$VPC_ID" != "None" ]; then
+            echo "Found VPC: $VPC_ID"
+            
+            # Delete Application Load Balancers
+            LB_ARNS=$(aws elbv2 describe-load-balancers \
+              --query "LoadBalancers[?VpcId=='$VPC_ID'].LoadBalancerArn" \
+              --output text \
+              --region ${{ secrets.AWS_DEFAULT_REGION }} 2>/dev/null || echo "")
+            
+            if [ ! -z "$LB_ARNS" ]; then
+              echo "Deleting Application Load Balancers..."
+              for ARN in $LB_ARNS; do
+                echo "  Deleting: $ARN"
+                aws elbv2 delete-load-balancer \
+                  --load-balancer-arn "$ARN" \
+                  --region ${{ secrets.AWS_DEFAULT_REGION }} || true
+              done
+            fi
+            
+            # Delete Classic Load Balancers
+            CLB_NAMES=$(aws elb describe-load-balancers \
+              --query "LoadBalancerDescriptions[?VPCId=='$VPC_ID'].LoadBalancerName" \
+              --output text \
+              --region ${{ secrets.AWS_DEFAULT_REGION }} 2>/dev/null || echo "")
+            
+            if [ ! -z "$CLB_NAMES" ]; then
+              echo "Deleting Classic Load Balancers..."
+              for NAME in $CLB_NAMES; do
+                echo "  Deleting: $NAME"
+                aws elb delete-load-balancer \
+                  --load-balancer-name "$NAME" \
+                  --region ${{ secrets.AWS_DEFAULT_REGION }} || true
+              done
+            fi
+            
+            echo "Waiting 90s for load balancers to be fully deleted..."
+            sleep 90
+          else
+            echo "VPC not found (may already be deleted)"
+          fi
+          
+          echo "✅ Load balancers cleanup completed"
+      
+      - name: Delete Network Interfaces (force cleanup)
+        run: |
+          echo "🧹 Force deleting remaining ENIs..."
+          
+          # Find all ENIs in the VPC
+          VPC_ID=$(aws ec2 describe-vpcs \
+            --filters "Name=tag:Name,Values=shared-vpc" \
+            --query "Vpcs[0].VpcId" \
+            --output text \
+            --region ${{ secrets.AWS_DEFAULT_REGION }} 2>/dev/null || echo "")
+          
+          if [ ! -z "$VPC_ID" ] && [ "$VPC_ID" != "None" ]; then
+            ENI_IDS=$(aws ec2 describe-network-interfaces \
+              --filters "Name=vpc-id,Values=$VPC_ID" \
+              --query "NetworkInterfaces[?Status!='in-use'].NetworkInterfaceId" \
+              --output text \
+              --region ${{ secrets.AWS_DEFAULT_REGION }} 2>/dev/null || echo "")
+            
+            if [ ! -z "$ENI_IDS" ]; then
+              for ENI in $ENI_IDS; do
+                echo "  Deleting ENI: $ENI"
+                aws ec2 delete-network-interface \
+                  --network-interface-id "$ENI" \
+                  --region ${{ secrets.AWS_DEFAULT_REGION }} || true
+              done
+            fi
+          fi
+          
+          echo "✅ ENI cleanup completed"
+      
       - name: Destroy Kubernetes
         working-directory: terraform/02-kubernetes
         run: |
           terraform init -backend-config="region=${{ secrets.AWS_DEFAULT_REGION }}"
           terraform destroy -var="region=${{ secrets.AWS_DEFAULT_REGION }}" -var="deploy_clusters=${{ github.event.inputs.clusters_to_deploy }}" -auto-approve
+      
+      - name: Wait for resources cleanup
+        run: |
+          echo "⏳ Waiting 30s for AWS to cleanup resources..."
+          sleep 30
       
       - name: Destroy Networking
         if: github.event.inputs.clusters_to_deploy == 'all'
