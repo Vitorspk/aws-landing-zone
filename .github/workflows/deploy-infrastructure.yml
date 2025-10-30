@@ -1,0 +1,186 @@
+name: Deploy Infrastructure
+
+on:
+  workflow_dispatch:
+    inputs:
+      phase:
+        description: 'Which phase to deploy'
+        required: true
+        type: choice
+        options:
+          - all
+          - iam
+          - networking
+          - kubernetes
+      action:
+        description: 'Terraform action'
+        required: true
+        type: choice
+        options:
+          - plan
+          - apply
+      clusters:
+        description: 'Which clusters (for kubernetes phase)'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - dev
+          - stg
+          - prd
+          - sdx
+          - dev,stg
+          - dev,stg,prd
+
+env:
+  TF_VERSION: 1.5.0
+  AWS_REGION: sa-east-1
+
+jobs:
+  deploy:
+    name: Deploy ${{ github.event.inputs.phase }}
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+      
+      - name: Setup kubectl
+        if: github.event.inputs.phase == 'kubernetes' || github.event.inputs.phase == 'all'
+        uses: azure/setup-kubectl@v4
+        with:
+          version: 'latest'
+      
+      # ==============================================================================
+      # CLEANUP PHASE
+      # ==============================================================================
+      
+      - name: Cleanup Conflicting Resources
+        if: github.event.inputs.action == 'apply'
+        run: |
+          echo "🧹 Cleaning up potentially conflicting resources..."
+          
+          # CloudWatch Log Groups
+          LOG_GROUPS=(
+            "/aws/vpc/shared-vpc/flow-logs"
+            "/aws/eks/eks-dev/cluster"
+            "/aws/eks/eks-stg/cluster"
+            "/aws/eks/eks-prd/cluster"
+            "/aws/eks/eks-sdx/cluster"
+          )
+          
+          for LOG_GROUP in "${LOG_GROUPS[@]}"; do
+            aws logs delete-log-group \
+              --log-group-name "$LOG_GROUP" \
+              --region ${{ env.AWS_REGION }} 2>/dev/null || true
+          done
+          
+          # Kubernetes Jobs
+          for CLUSTER in eks-dev eks-stg eks-prd eks-sdx; do
+            if aws eks describe-cluster --name $CLUSTER --region ${{ env.AWS_REGION }} &>/dev/null; then
+              aws eks update-kubeconfig --name $CLUSTER --region ${{ env.AWS_REGION }} 2>/dev/null || true
+              kubectl delete job --all -n ingress-nginx --ignore-not-found 2>/dev/null || true
+              kubectl delete job --all -n ingress-nginx-internal --ignore-not-found 2>/dev/null || true
+            fi
+          done
+          
+          echo "✅ Cleanup completed"
+      
+      # ==============================================================================
+      # PHASE 0 - IAM
+      # ==============================================================================
+      
+      - name: "Phase 0: IAM - Init"
+        if: github.event.inputs.phase == 'all' || github.event.inputs.phase == 'iam'
+        working-directory: terraform/00-iam
+        run: terraform init -backend-config="region=${{ env.AWS_REGION }}"
+      
+      - name: "Phase 0: IAM - Plan"
+        if: (github.event.inputs.phase == 'all' || github.event.inputs.phase == 'iam')
+        working-directory: terraform/00-iam
+        run: terraform plan -var="region=${{ env.AWS_REGION }}" -out=tfplan
+      
+      - name: "Phase 0: IAM - Apply"
+        if: (github.event.inputs.phase == 'all' || github.event.inputs.phase == 'iam') && github.event.inputs.action == 'apply'
+        working-directory: terraform/00-iam
+        run: terraform apply -auto-approve tfplan
+      
+      # ==============================================================================
+      # PHASE 1 - NETWORKING
+      # ==============================================================================
+      
+      - name: "Phase 1: Networking - Init"
+        if: github.event.inputs.phase == 'all' || github.event.inputs.phase == 'networking'
+        working-directory: terraform/01-networking
+        run: terraform init -backend-config="region=${{ env.AWS_REGION }}"
+      
+      - name: "Phase 1: Networking - Plan"
+        if: (github.event.inputs.phase == 'all' || github.event.inputs.phase == 'networking')
+        working-directory: terraform/01-networking
+        run: terraform plan -var="region=${{ env.AWS_REGION }}" -out=tfplan
+      
+      - name: "Phase 1: Networking - Apply"
+        if: (github.event.inputs.phase == 'all' || github.event.inputs.phase == 'networking') && github.event.inputs.action == 'apply'
+        working-directory: terraform/01-networking
+        run: terraform apply -auto-approve tfplan
+      
+      # ==============================================================================
+      # PHASE 2 - KUBERNETES
+      # ==============================================================================
+      
+      - name: "Phase 2: Kubernetes - Init"
+        if: github.event.inputs.phase == 'all' || github.event.inputs.phase == 'kubernetes'
+        working-directory: terraform/02-kubernetes
+        run: terraform init -backend-config="region=${{ env.AWS_REGION }}"
+      
+      - name: "Phase 2: Kubernetes - Plan"
+        if: (github.event.inputs.phase == 'all' || github.event.inputs.phase == 'kubernetes')
+        working-directory: terraform/02-kubernetes
+        run: |
+          terraform plan \
+            -var="region=${{ env.AWS_REGION }}" \
+            -var="deploy_clusters=${{ github.event.inputs.clusters }}" \
+            -out=tfplan
+      
+      - name: "Phase 2: Kubernetes - Apply"
+        if: (github.event.inputs.phase == 'all' || github.event.inputs.phase == 'kubernetes') && github.event.inputs.action == 'apply'
+        working-directory: terraform/02-kubernetes
+        run: terraform apply -auto-approve tfplan
+      
+      # ==============================================================================
+      # SUMMARY
+      # ==============================================================================
+      
+      - name: Deployment Summary
+        if: always()
+        run: |
+          echo ""
+          echo "=========================================="
+          echo "📊 Deployment Summary"
+          echo "=========================================="
+          echo ""
+          echo "Phase: ${{ github.event.inputs.phase }}"
+          echo "Action: ${{ github.event.inputs.action }}"
+          echo "Clusters: ${{ github.event.inputs.clusters }}"
+          echo "Region: ${{ env.AWS_REGION }}"
+          echo ""
+          
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "✅ Deployment completed successfully!"
+          else
+            echo "❌ Deployment failed. Check logs above."
+          fi
+          echo ""
