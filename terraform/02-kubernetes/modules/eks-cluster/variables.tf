@@ -100,25 +100,25 @@ variable "node_group_labels" {
 variable "vpc_cni_version" {
   description = "VPC CNI addon version"
   type        = string
-  default     = "v1.18.1-eksbuild.3"
+  default     = "v1.19.1-eksbuild.1"
 }
 
 variable "coredns_version" {
   description = "CoreDNS addon version"
   type        = string
-  default     = "v1.11.1-eksbuild.9"
+  default     = "v1.11.4-eksbuild.1"
 }
 
 variable "kube_proxy_version" {
   description = "Kube-proxy addon version"
   type        = string
-  default     = "v1.29.3-eksbuild.5"
+  default     = "v1.34.0-eksbuild.1"
 }
 
 variable "ebs_csi_driver_version" {
   description = "EBS CSI driver addon version"
   type        = string
-  default     = "v1.30.0-eksbuild.1"
+  default     = "v1.38.1-eksbuild.1"
 }
 
 variable "enable_ebs_csi_driver" {

@@ -37,7 +37,7 @@ locals {
 variable "kubernetes_version" {
   description = "Kubernetes version for all clusters"
   type        = string
-  default     = "1.29"
+  default     = "1.34"
 }
 
 variable "clusters" {
