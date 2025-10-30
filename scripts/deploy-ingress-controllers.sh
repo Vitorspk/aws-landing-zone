@@ -99,6 +99,49 @@ if ! kubectl apply -f "$REPO_ROOT/manifests/eks-ingress-nginx-1.13.0-internal.ya
     fail_critical "Failed to apply internal NGINX manifest."
 fi
 
+# CRITICAL: Wait for admission webhook jobs to complete BEFORE waiting for deployments
+echo "5.5. Waiting for admission webhook jobs to complete..."
+echo "5.5.1. Waiting for external admission jobs..."
+if ! kubectl wait --for=condition=complete --timeout=300s \
+  job/ingress-nginx-admission-create -n ingress-nginx 2>/dev/null; then
+    echo -e "${YELLOW}Warning: ingress-nginx-admission-create job did not complete${NC}"
+    kubectl describe job ingress-nginx-admission-create -n ingress-nginx || true
+fi
+
+if ! kubectl wait --for=condition=complete --timeout=60s \
+  job/ingress-nginx-admission-patch -n ingress-nginx 2>/dev/null; then
+    echo -e "${YELLOW}Warning: ingress-nginx-admission-patch job did not complete${NC}"
+    kubectl describe job ingress-nginx-admission-patch -n ingress-nginx || true
+fi
+
+echo "5.5.2. Waiting for internal admission jobs..."
+if ! kubectl wait --for=condition=complete --timeout=300s \
+  job/ingress-nginx-internal-admission-create -n ingress-nginx-internal 2>/dev/null; then
+    echo -e "${YELLOW}Warning: ingress-nginx-internal-admission-create job did not complete${NC}"
+    kubectl describe job ingress-nginx-internal-admission-create -n ingress-nginx-internal || true
+fi
+
+if ! kubectl wait --for=condition=complete --timeout=60s \
+  job/ingress-nginx-internal-admission-patch -n ingress-nginx-internal 2>/dev/null; then
+    echo -e "${YELLOW}Warning: ingress-nginx-internal-admission-patch job did not complete${NC}"
+    kubectl describe job ingress-nginx-internal-admission-patch -n ingress-nginx-internal || true
+fi
+
+echo "5.5.3. Verifying admission secrets were created..."
+if ! kubectl get secret ingress-nginx-external-admission -n ingress-nginx &>/dev/null; then
+    echo -e "${RED}ERROR: Secret 'ingress-nginx-external-admission' was not created!${NC}"
+    kubectl get secrets -n ingress-nginx
+    fail_critical "Admission webhook secret not created for external ingress"
+fi
+
+if ! kubectl get secret ingress-nginx-internal-admission -n ingress-nginx-internal &>/dev/null; then
+    echo -e "${RED}ERROR: Secret 'ingress-nginx-internal-admission' was not created!${NC}"
+    kubectl get secrets -n ingress-nginx-internal
+    fail_critical "Admission webhook secret not created for internal ingress"
+fi
+
+echo -e "${GREEN}✓ Admission secrets created successfully${NC}"
+
 # Wait for deployments
 echo "6. Waiting for deployments to be ready (timeout: 10 minutes)..."
 
