@@ -180,6 +180,11 @@ module "eks_sdx" {
 # ==============================================================================
 # DEPLOY NGINX INGRESS CONTROLLERS
 # ==============================================================================
+# Exit code handling:
+#   0   = Success (all deployments ready)
+#   100 = Timeout (deployments initiated but not ready yet - non-critical)
+#   1   = Critical failure (cluster issues, manifest errors, etc)
+# Only exit code 1 will fail the Terraform apply
 
 resource "null_resource" "deploy_ingress_dev" {
   count      = local.deploy_cluster_map["dev"] ? 1 : 0
@@ -191,7 +196,17 @@ resource "null_resource" "deploy_ingress_dev" {
   }
 
   provisioner "local-exec" {
-    command = "bash ${path.root}/../../scripts/deploy-ingress-controllers.sh ${var.clusters.dev.name} ${var.region}"
+    command = <<-EOT
+      set +e
+      bash ${path.root}/../../scripts/deploy-ingress-controllers.sh ${var.clusters.dev.name} ${var.region}
+      EXIT_CODE=$?
+      if [ $EXIT_CODE -eq 100 ]; then
+        echo "⚠️  NGINX deployment timeout - deployment continues in background"
+        echo "Verify status with: kubectl get pods -n ingress-nginx"
+        exit 0
+      fi
+      exit $EXIT_CODE
+    EOT
   }
 }
 
@@ -205,7 +220,17 @@ resource "null_resource" "deploy_ingress_stg" {
   }
 
   provisioner "local-exec" {
-    command = "bash ${path.root}/../../scripts/deploy-ingress-controllers.sh ${var.clusters.stg.name} ${var.region}"
+    command = <<-EOT
+      set +e
+      bash ${path.root}/../../scripts/deploy-ingress-controllers.sh ${var.clusters.stg.name} ${var.region}
+      EXIT_CODE=$?
+      if [ $EXIT_CODE -eq 100 ]; then
+        echo "⚠️  NGINX deployment timeout - deployment continues in background"
+        echo "Verify status with: kubectl get pods -n ingress-nginx"
+        exit 0
+      fi
+      exit $EXIT_CODE
+    EOT
   }
 }
 
@@ -219,7 +244,17 @@ resource "null_resource" "deploy_ingress_prd" {
   }
 
   provisioner "local-exec" {
-    command = "bash ${path.root}/../../scripts/deploy-ingress-controllers.sh ${var.clusters.prd.name} ${var.region}"
+    command = <<-EOT
+      set +e
+      bash ${path.root}/../../scripts/deploy-ingress-controllers.sh ${var.clusters.prd.name} ${var.region}
+      EXIT_CODE=$?
+      if [ $EXIT_CODE -eq 100 ]; then
+        echo "⚠️  NGINX deployment timeout - deployment continues in background"
+        echo "Verify status with: kubectl get pods -n ingress-nginx"
+        exit 0
+      fi
+      exit $EXIT_CODE
+    EOT
   }
 }
 
@@ -233,6 +268,16 @@ resource "null_resource" "deploy_ingress_sdx" {
   }
 
   provisioner "local-exec" {
-    command = "bash ${path.root}/../../scripts/deploy-ingress-controllers.sh ${var.clusters.sdx.name} ${var.region}"
+    command = <<-EOT
+      set +e
+      bash ${path.root}/../../scripts/deploy-ingress-controllers.sh ${var.clusters.sdx.name} ${var.region}
+      EXIT_CODE=$?
+      if [ $EXIT_CODE -eq 100 ]; then
+        echo "⚠️  NGINX deployment timeout - deployment continues in background"
+        echo "Verify status with: kubectl get pods -n ingress-nginx"
+        exit 0
+      fi
+      exit $EXIT_CODE
+    EOT
   }
 }
