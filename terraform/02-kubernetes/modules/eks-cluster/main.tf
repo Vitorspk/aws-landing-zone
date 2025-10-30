@@ -87,7 +87,7 @@ resource "aws_eks_cluster" "main" {
 
   depends_on = [
     var.cluster_role_arn,
-    aws_cloudwatch_log_group.cluster  # Ensure log group exists first
+    aws_cloudwatch_log_group.cluster # Ensure log group exists first
   ]
 }
 
