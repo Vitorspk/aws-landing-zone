@@ -53,12 +53,33 @@ echo "5. Deploying internal NGINX Ingress Controller..."
 kubectl apply -f "$REPO_ROOT/manifests/eks-ingress-nginx-1.13.0-internal.yaml"
 
 # Wait for deployments
-echo "6. Waiting for deployments to be ready..."
-kubectl wait --for=condition=available --timeout=300s \
-  deployment/ingress-nginx-controller -n ingress-nginx
+echo "6. Waiting for deployments to be ready (timeout: 10 minutes)..."
 
-kubectl wait --for=condition=available --timeout=300s \
-  deployment/ingress-nginx-internal-controller -n ingress-nginx-internal
+# Check pods status first
+echo "6.1. Checking external ingress pods..."
+kubectl get pods -n ingress-nginx
+
+echo "6.2. Checking internal ingress pods..."
+kubectl get pods -n ingress-nginx-internal
+
+# Wait for deployments with increased timeout
+echo "6.3. Waiting for external ingress deployment..."
+kubectl wait --for=condition=available --timeout=600s \
+  deployment/ingress-nginx-controller -n ingress-nginx || {
+    echo "⚠️  External ingress deployment failed to become ready. Checking logs..."
+    kubectl describe deployment ingress-nginx-controller -n ingress-nginx
+    kubectl logs -n ingress-nginx -l app.kubernetes.io/component=controller --tail=50
+    exit 1
+  }
+
+echo "6.4. Waiting for internal ingress deployment..."
+kubectl wait --for=condition=available --timeout=600s \
+  deployment/ingress-nginx-internal-controller -n ingress-nginx-internal || {
+    echo "⚠️  Internal ingress deployment failed to become ready. Checking logs..."
+    kubectl describe deployment ingress-nginx-internal-controller -n ingress-nginx-internal
+    kubectl logs -n ingress-nginx-internal -l app.kubernetes.io/component=controller --tail=50
+    exit 1
+  }
 
 # Get LoadBalancer IPs
 echo ""
