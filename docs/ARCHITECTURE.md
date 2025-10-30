@@ -140,10 +140,10 @@
 
 | Environment | Cluster Name | Version | Node Type | Nodes (Min/Desired/Max) | Disk Size | Capacity Type |
 |-------------|--------------|---------|-----------|-------------------------|-----------|---------------|
-| Development | eks-dev | 1.29 | t3.medium | 1/2/4 | 50 GB | ON_DEMAND |
-| Staging | eks-stg | 1.29 | t3.medium | 1/2/4 | 50 GB | ON_DEMAND |
-| Production | eks-prd | 1.29 | t3.large | 2/3/6 | 100 GB | ON_DEMAND |
-| Sandbox | eks-sdx | 1.29 | t3.small | 1/1/3 | 30 GB | SPOT |
+| Development | eks-dev | 1.34 | t3.medium | 1/2/4 | 50 GB | ON_DEMAND |
+| Staging | eks-stg | 1.34 | t3.medium | 1/2/4 | 50 GB | ON_DEMAND |
+| Production | eks-prd | 1.34 | t3.large | 2/3/6 | 100 GB | ON_DEMAND |
+| Sandbox | eks-sdx | 1.34 | t3.small | 1/1/3 | 30 GB | SPOT |
 
 **EKS Features:**
 - **Endpoint Access**: Public + Private
