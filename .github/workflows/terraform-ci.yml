@@ -1,4 +1,4 @@
-name: Terraform Validate
+name: Terraform CI
 
 on:
   pull_request:
@@ -9,12 +9,6 @@ on:
       - 'terraform/**'
       - '.github/workflows/**'
       - 'scripts/**'
-  workflow_dispatch:
-    inputs:
-      branch:
-        description: 'Branch to validate'
-        required: false
-        default: 'master'
   push:
     branches:
       - master
@@ -22,13 +16,15 @@ on:
     paths:
       - 'terraform/**'
       - '.github/workflows/**'
+  workflow_dispatch:
 
 jobs:
   validate:
-    name: Terraform Validate
+    name: Validate Terraform (${{ matrix.phase }})
     runs-on: ubuntu-latest
     
     strategy:
+      fail-fast: false
       matrix:
         phase: ['00-iam', '01-networking', '02-kubernetes']
     
@@ -53,7 +49,7 @@ jobs:
         working-directory: terraform/${{ matrix.phase }}
         run: terraform validate
       
-      - name: Run tflint
+      - name: Setup tflint
         uses: terraform-linters/setup-tflint@v4
         with:
           tflint_version: latest
