@@ -100,7 +100,7 @@ variable "node_group_labels" {
 variable "vpc_cni_version" {
   description = "VPC CNI addon version"
   type        = string
-  default     = "v1.19.3-eksbuild.1"
+  default     = "v1.20.4-eksbuild.1"
 }
 
 variable "coredns_version" {
