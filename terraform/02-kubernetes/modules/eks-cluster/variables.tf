@@ -118,7 +118,7 @@ variable "kube_proxy_version" {
 variable "ebs_csi_driver_version" {
   description = "EBS CSI driver addon version"
   type        = string
-  default     = "v1.37.0-eksbuild.1"
+  default     = "v1.38.1-eksbuild.2"
 }
 
 variable "enable_ebs_csi_driver" {
