@@ -138,7 +138,24 @@ wait_for_job() {
     if ! kubectl wait --for=condition=complete --timeout="$timeout" \
       "job/$job_name" -n "$namespace" 2>/dev/null; then
         echo -e "${RED}Error: Job '$job_name' did not complete within $timeout.${NC}"
+        echo ""
+        echo "=== Job Details ==="
         kubectl describe "job/$job_name" -n "$namespace" || true
+        echo ""
+        echo "=== Pod Status ==="
+        local pod_name=$(kubectl get pods -n "$namespace" -l "job-name=$job_name" --sort-by=.metadata.creationTimestamp -o jsonpath='{.items[-1:].metadata.name}' 2>/dev/null || echo "")
+        if [ -n "$pod_name" ]; then
+            echo "Pod: $pod_name"
+            kubectl get pod "$pod_name" -n "$namespace" -o wide || true
+            echo ""
+            echo "=== Pod Events ==="
+            kubectl describe pod "$pod_name" -n "$namespace" | grep -A 20 "Events:" || true
+            echo ""
+            echo "=== Pod Logs ==="
+            kubectl logs "$pod_name" -n "$namespace" --tail=50 || echo "No logs available"
+        else
+            echo "No pod found for job '$job_name'"
+        fi
         fail_critical "Admission webhook job '$job_name' failed for $ingress_type ingress."
     fi
 }
@@ -168,7 +185,7 @@ wait_for_job "ingress-nginx-internal-admission-create" "ingress-nginx-internal" 
 wait_for_job "ingress-nginx-internal-admission-patch" "ingress-nginx-internal" "60s" "internal"
 
 echo "5.5.3. Verifying admission secrets were created..."
-verify_secret_exists "ingress-nginx-admission" "ingress-nginx" "external"
+verify_secret_exists "ingress-nginx-external-admission" "ingress-nginx" "external"
 verify_secret_exists "ingress-nginx-internal-admission" "ingress-nginx-internal" "internal"
 
 echo -e "${GREEN}✓ Admission secrets created successfully${NC}"

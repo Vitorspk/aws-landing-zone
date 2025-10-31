@@ -575,6 +575,8 @@ metadata:
   name: ingress-nginx-internal-admission-create
   namespace: ingress-nginx-internal
 spec:
+  activeDeadlineSeconds: 300
+  backoffLimit: 3
   template:
     metadata:
       labels:
@@ -629,6 +631,8 @@ metadata:
   name: ingress-nginx-internal-admission-patch
   namespace: ingress-nginx-internal
 spec:
+  activeDeadlineSeconds: 120
+  backoffLimit: 3
   template:
     metadata:
       labels:
