@@ -1,0 +1,327 @@
+name: Deploy Ingress NGINX
+
+on:
+  workflow_dispatch:
+    inputs:
+      clusters:
+        description: 'Which clusters to deploy Ingress NGINX'
+        required: true
+        type: choice
+        options:
+          - all
+          - dev
+          - stg
+          - prd
+          - sdx
+          - dev,stg
+          - dev,stg,prd
+      ingress_type:
+        description: 'Which Ingress type to deploy'
+        required: true
+        type: choice
+        default: 'both'
+        options:
+          - both
+          - external
+          - internal
+      action:
+        description: 'Action to perform'
+        required: true
+        type: choice
+        default: 'apply'
+        options:
+          - apply
+          - delete
+          - status
+      validate:
+        description: 'Validate deployment after apply'
+        required: false
+        type: boolean
+        default: true
+
+env:
+  AWS_REGION: sa-east-1
+
+jobs:
+  deploy-ingress:
+    name: Deploy Ingress NGINX
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: 'latest'
+      
+      - name: Parse clusters input
+        id: parse_clusters
+        run: |
+          CLUSTERS_INPUT="${{ github.event.inputs.clusters }}"
+          
+          if [ "$CLUSTERS_INPUT" == "all" ]; then
+            CLUSTERS="dev stg prd sdx"
+          else
+            CLUSTERS=$(echo "$CLUSTERS_INPUT" | tr ',' ' ')
+          fi
+          
+          echo "clusters=$CLUSTERS" >> $GITHUB_OUTPUT
+          echo "📋 Clusters to process: $CLUSTERS"
+      
+      - name: Deploy Ingress NGINX
+        env:
+          CLUSTERS: ${{ steps.parse_clusters.outputs.clusters }}
+          INGRESS_TYPE: ${{ github.event.inputs.ingress_type }}
+          ACTION: ${{ github.event.inputs.action }}
+          VALIDATE: ${{ github.event.inputs.validate }}
+        run: |
+          echo "=================================================="
+          echo "🚀 Ingress NGINX Deployment"
+          echo "=================================================="
+          echo ""
+          echo "Clusters: $CLUSTERS"
+          echo "Ingress Type: $INGRESS_TYPE"
+          echo "Action: $ACTION"
+          echo "Validate: $VALIDATE"
+          echo ""
+          
+          # Counters
+          TOTAL=0
+          SUCCESS=0
+          FAILED=0
+          
+          for ENV in $CLUSTERS; do
+            CLUSTER_NAME="eks-${ENV}"
+            TOTAL=$((TOTAL + 1))
+            
+            echo ""
+            echo "=================================================="
+            echo "📍 Processing Cluster: $CLUSTER_NAME"
+            echo "=================================================="
+            echo ""
+            
+            # Check if cluster exists
+            if ! aws eks describe-cluster --name "$CLUSTER_NAME" --region $AWS_REGION &>/dev/null; then
+              echo "⚠️  Cluster $CLUSTER_NAME does not exist. Skipping..."
+              FAILED=$((FAILED + 1))
+              continue
+            fi
+            
+            echo "✅ Cluster $CLUSTER_NAME exists"
+            
+            # Update kubeconfig
+            echo "🔗 Connecting to cluster..."
+            if ! aws eks update-kubeconfig --name "$CLUSTER_NAME" --region $AWS_REGION; then
+              echo "❌ Failed to connect to cluster $CLUSTER_NAME"
+              FAILED=$((FAILED + 1))
+              continue
+            fi
+            
+            echo "✅ Connected to $CLUSTER_NAME"
+            
+            # Test connection
+            if ! kubectl get nodes &>/dev/null; then
+              echo "❌ Cannot connect to Kubernetes API"
+              FAILED=$((FAILED + 1))
+              continue
+            fi
+            
+            # Perform action
+            case "$ACTION" in
+              apply)
+                echo ""
+                echo "📦 Applying Ingress NGINX manifests..."
+                echo ""
+                
+                # Apply External
+                if [ "$INGRESS_TYPE" == "both" ] || [ "$INGRESS_TYPE" == "external" ]; then
+                  echo "🌐 Applying External Ingress..."
+                  if kubectl apply -f manifests/eks-ingress-nginx-1.13.0-external.yaml --validate=false; then
+                    echo "✅ External Ingress applied successfully"
+                  else
+                    echo "❌ Failed to apply External Ingress"
+                    FAILED=$((FAILED + 1))
+                    continue
+                  fi
+                fi
+                
+                # Apply Internal
+                if [ "$INGRESS_TYPE" == "both" ] || [ "$INGRESS_TYPE" == "internal" ]; then
+                  echo "🔒 Applying Internal Ingress..."
+                  if kubectl apply -f manifests/eks-ingress-nginx-1.13.0-internal.yaml --validate=false; then
+                    echo "✅ Internal Ingress applied successfully"
+                  else
+                    echo "❌ Failed to apply Internal Ingress"
+                    FAILED=$((FAILED + 1))
+                    continue
+                  fi
+                fi
+                
+                # Validation
+                if [ "$VALIDATE" == "true" ]; then
+                  echo ""
+                  echo "🔍 Validating deployment..."
+                  echo ""
+                  
+                  # Wait for pods to be ready
+                  if [ "$INGRESS_TYPE" == "both" ] || [ "$INGRESS_TYPE" == "external" ]; then
+                    echo "⏳ Waiting for External Ingress pods..."
+                    kubectl wait --for=condition=ready pod \
+                      -l app.kubernetes.io/name=ingress-nginx \
+                      -n ingress-nginx \
+                      --timeout=300s || echo "⚠️  Timeout waiting for External pods"
+                  fi
+                  
+                  if [ "$INGRESS_TYPE" == "both" ] || [ "$INGRESS_TYPE" == "internal" ]; then
+                    echo "⏳ Waiting for Internal Ingress pods..."
+                    kubectl wait --for=condition=ready pod \
+                      -l app.kubernetes.io/name=ingress-nginx-internal \
+                      -n ingress-nginx-internal \
+                      --timeout=300s || echo "⚠️  Timeout waiting for Internal pods"
+                  fi
+                  
+                  echo ""
+                  echo "📊 Deployment Status:"
+                  echo ""
+                  
+                  # Show status
+                  if [ "$INGRESS_TYPE" == "both" ] || [ "$INGRESS_TYPE" == "external" ]; then
+                    echo "External Ingress:"
+                    kubectl get pods -n ingress-nginx -l app.kubernetes.io/name=ingress-nginx
+                    echo ""
+                    echo "External LoadBalancer:"
+                    kubectl get svc -n ingress-nginx ingress-nginx-controller -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' || echo "Pending..."
+                    echo ""
+                  fi
+                  
+                  if [ "$INGRESS_TYPE" == "both" ] || [ "$INGRESS_TYPE" == "internal" ]; then
+                    echo ""
+                    echo "Internal Ingress:"
+                    kubectl get pods -n ingress-nginx-internal -l app.kubernetes.io/name=ingress-nginx-internal
+                    echo ""
+                    echo "Internal LoadBalancer:"
+                    kubectl get svc -n ingress-nginx-internal ingress-nginx-internal-controller -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' || echo "Pending..."
+                    echo ""
+                  fi
+                fi
+                
+                SUCCESS=$((SUCCESS + 1))
+                ;;
+              
+              delete)
+                echo ""
+                echo "🗑️  Deleting Ingress NGINX resources..."
+                echo ""
+                
+                # Delete External
+                if [ "$INGRESS_TYPE" == "both" ] || [ "$INGRESS_TYPE" == "external" ]; then
+                  echo "🌐 Deleting External Ingress..."
+                  kubectl delete -f manifests/eks-ingress-nginx-1.13.0-external.yaml --ignore-not-found || echo "⚠️  Some resources not found"
+                  
+                  # Cleanup Jobs
+                  kubectl delete job --all -n ingress-nginx --ignore-not-found 2>/dev/null || true
+                  
+                  echo "✅ External Ingress deleted"
+                fi
+                
+                # Delete Internal
+                if [ "$INGRESS_TYPE" == "both" ] || [ "$INGRESS_TYPE" == "internal" ]; then
+                  echo "🔒 Deleting Internal Ingress..."
+                  kubectl delete -f manifests/eks-ingress-nginx-1.13.0-internal.yaml --ignore-not-found || echo "⚠️  Some resources not found"
+                  
+                  # Cleanup Jobs
+                  kubectl delete job --all -n ingress-nginx-internal --ignore-not-found 2>/dev/null || true
+                  
+                  echo "✅ Internal Ingress deleted"
+                fi
+                
+                SUCCESS=$((SUCCESS + 1))
+                ;;
+              
+              status)
+                echo ""
+                echo "📊 Ingress NGINX Status"
+                echo ""
+                
+                # External Status
+                if [ "$INGRESS_TYPE" == "both" ] || [ "$INGRESS_TYPE" == "external" ]; then
+                  echo "=== External Ingress ==="
+                  echo ""
+                  echo "Pods:"
+                  kubectl get pods -n ingress-nginx -l app.kubernetes.io/name=ingress-nginx 2>/dev/null || echo "Not deployed"
+                  echo ""
+                  echo "Service:"
+                  kubectl get svc -n ingress-nginx ingress-nginx-controller 2>/dev/null || echo "Not deployed"
+                  echo ""
+                  echo "IngressClass:"
+                  kubectl get ingressclass nginx-external 2>/dev/null || echo "Not found"
+                  echo ""
+                fi
+                
+                # Internal Status
+                if [ "$INGRESS_TYPE" == "both" ] || [ "$INGRESS_TYPE" == "internal" ]; then
+                  echo "=== Internal Ingress ==="
+                  echo ""
+                  echo "Pods:"
+                  kubectl get pods -n ingress-nginx-internal -l app.kubernetes.io/name=ingress-nginx-internal 2>/dev/null || echo "Not deployed"
+                  echo ""
+                  echo "Service:"
+                  kubectl get svc -n ingress-nginx-internal ingress-nginx-internal-controller 2>/dev/null || echo "Not deployed"
+                  echo ""
+                  echo "IngressClass:"
+                  kubectl get ingressclass nginx-internal 2>/dev/null || echo "Not found"
+                  echo ""
+                fi
+                
+                SUCCESS=$((SUCCESS + 1))
+                ;;
+            esac
+          done
+          
+          echo ""
+          echo "=================================================="
+          echo "📊 Summary"
+          echo "=================================================="
+          echo ""
+          echo "Total clusters processed: $TOTAL"
+          echo "Successful: $SUCCESS"
+          echo "Failed: $FAILED"
+          echo ""
+          
+          if [ $FAILED -gt 0 ]; then
+            echo "⚠️  Some clusters failed. Check logs above."
+            exit 1
+          else
+            echo "✅ All clusters processed successfully!"
+          fi
+      
+      - name: Summary
+        if: always()
+        run: |
+          echo ""
+          echo "=================================================="
+          echo "📋 Deployment Summary"
+          echo "=================================================="
+          echo ""
+          echo "Workflow: Ingress NGINX Deployment"
+          echo "Clusters: ${{ github.event.inputs.clusters }}"
+          echo "Ingress Type: ${{ github.event.inputs.ingress_type }}"
+          echo "Action: ${{ github.event.inputs.action }}"
+          echo "Status: ${{ job.status }}"
+          echo ""
+          
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "✅ Deployment completed successfully!"
+          else
+            echo "❌ Deployment failed. Check logs above."
+          fi
+          echo ""

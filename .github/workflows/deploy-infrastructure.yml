@@ -59,12 +59,6 @@ jobs:
         with:
           terraform_version: ${{ env.TF_VERSION }}
       
-      - name: Setup kubectl
-        if: github.event.inputs.phase == 'kubernetes' || github.event.inputs.phase == 'all'
-        uses: azure/setup-kubectl@v4
-        with:
-          version: 'latest'
-      
       # ==============================================================================
       # CLEANUP PHASE
       # ==============================================================================
@@ -87,15 +81,6 @@ jobs:
             aws logs delete-log-group \
               --log-group-name "$LOG_GROUP" \
               --region ${{ env.AWS_REGION }} 2>/dev/null || true
-          done
-          
-          # Kubernetes Jobs
-          for CLUSTER in eks-dev eks-stg eks-prd eks-sdx; do
-            if aws eks describe-cluster --name $CLUSTER --region ${{ env.AWS_REGION }} &>/dev/null; then
-              aws eks update-kubeconfig --name $CLUSTER --region ${{ env.AWS_REGION }} 2>/dev/null || true
-              kubectl delete job --all -n ingress-nginx --ignore-not-found 2>/dev/null || true
-              kubectl delete job --all -n ingress-nginx-internal --ignore-not-found 2>/dev/null || true
-            fi
           done
           
           echo "✅ Cleanup completed"
@@ -192,9 +177,14 @@ jobs:
               echo "Review the plan above. If OK:"
               echo "  Run workflow again with action: apply"
             else
-              echo "✅ Deployment completed successfully!"
+              echo "✅ Infrastructure deployment completed successfully!"
               echo ""
               echo "Resources are now live in AWS."
+              echo ""
+              echo "📝 Next Steps:"
+              echo "  1. Deploy Ingress NGINX using: deploy-ingress-nginx.yml"
+              echo "  2. Validate cluster connectivity"
+              echo "  3. Deploy applications"
             fi
           else
             echo "❌ Deployment failed. Check logs above."

@@ -1,0 +1,246 @@
+name: Destroy Ingress NGINX
+
+on:
+  workflow_dispatch:
+    inputs:
+      clusters:
+        description: 'Which clusters to destroy Ingress NGINX'
+        required: true
+        type: choice
+        options:
+          - all
+          - dev
+          - stg
+          - prd
+          - sdx
+          - dev,stg
+      ingress_type:
+        description: 'Which Ingress type to destroy'
+        required: true
+        type: choice
+        default: 'both'
+        options:
+          - both
+          - external
+          - internal
+      confirm:
+        description: 'Type "yes" to confirm destruction'
+        required: true
+        type: string
+
+env:
+  AWS_REGION: sa-east-1
+
+jobs:
+  destroy-ingress:
+    name: Destroy Ingress NGINX
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Validate confirmation
+        run: |
+          if [ "${{ github.event.inputs.confirm }}" != "yes" ]; then
+            echo "❌ Destruction not confirmed. Please type 'yes' to confirm."
+            exit 1
+          fi
+          echo "✅ Destruction confirmed"
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: 'latest'
+      
+      - name: Parse clusters input
+        id: parse_clusters
+        run: |
+          CLUSTERS_INPUT="${{ github.event.inputs.clusters }}"
+          
+          if [ "$CLUSTERS_INPUT" == "all" ]; then
+            CLUSTERS="dev stg prd sdx"
+          else
+            CLUSTERS=$(echo "$CLUSTERS_INPUT" | tr ',' ' ')
+          fi
+          
+          echo "clusters=$CLUSTERS" >> $GITHUB_OUTPUT
+          echo "📋 Clusters to process: $CLUSTERS"
+      
+      - name: Destroy Ingress NGINX
+        env:
+          CLUSTERS: ${{ steps.parse_clusters.outputs.clusters }}
+          INGRESS_TYPE: ${{ github.event.inputs.ingress_type }}
+        run: |
+          echo "=================================================="
+          echo "🗑️  Ingress NGINX Destruction"
+          echo "=================================================="
+          echo ""
+          echo "Clusters: $CLUSTERS"
+          echo "Ingress Type: $INGRESS_TYPE"
+          echo ""
+          
+          # Counters
+          TOTAL=0
+          SUCCESS=0
+          FAILED=0
+          
+          for ENV in $CLUSTERS; do
+            CLUSTER_NAME="eks-${ENV}"
+            TOTAL=$((TOTAL + 1))
+            
+            echo ""
+            echo "=================================================="
+            echo "📍 Processing Cluster: $CLUSTER_NAME"
+            echo "=================================================="
+            echo ""
+            
+            # Check if cluster exists
+            if ! aws eks describe-cluster --name "$CLUSTER_NAME" --region $AWS_REGION &>/dev/null; then
+              echo "⚠️  Cluster $CLUSTER_NAME does not exist. Skipping..."
+              SUCCESS=$((SUCCESS + 1))
+              continue
+            fi
+            
+            echo "✅ Cluster $CLUSTER_NAME exists"
+            
+            # Update kubeconfig
+            echo "🔗 Connecting to cluster..."
+            if ! aws eks update-kubeconfig --name "$CLUSTER_NAME" --region $AWS_REGION; then
+              echo "❌ Failed to connect to cluster $CLUSTER_NAME"
+              FAILED=$((FAILED + 1))
+              continue
+            fi
+            
+            echo "✅ Connected to $CLUSTER_NAME"
+            
+            # Delete External Ingress
+            if [ "$INGRESS_TYPE" == "both" ] || [ "$INGRESS_TYPE" == "external" ]; then
+              echo ""
+              echo "🌐 Destroying External Ingress..."
+              echo ""
+              
+              # Delete manifest resources
+              kubectl delete -f manifests/eks-ingress-nginx-1.13.0-external.yaml --ignore-not-found 2>&1 || echo "⚠️  Some resources not found"
+              
+              # Force delete stuck resources
+              echo "🧹 Cleaning up External namespace..."
+              
+              # Delete Jobs
+              kubectl delete job --all -n ingress-nginx --ignore-not-found --force --grace-period=0 2>/dev/null || true
+              
+              # Delete Pods
+              kubectl delete pods --all -n ingress-nginx --ignore-not-found --force --grace-period=0 2>/dev/null || true
+              
+              # Remove finalizers if namespace is stuck
+              kubectl get namespace ingress-nginx -o json 2>/dev/null | \
+                jq '.spec.finalizers = []' | \
+                kubectl replace --raw "/api/v1/namespaces/ingress-nginx/finalize" -f - 2>/dev/null || true
+              
+              # Wait for namespace deletion
+              echo "⏳ Waiting for External namespace deletion..."
+              kubectl wait --for=delete namespace/ingress-nginx --timeout=60s 2>/dev/null || echo "⚠️  Namespace may still be terminating"
+              
+              echo "✅ External Ingress destroyed"
+            fi
+            
+            # Delete Internal Ingress
+            if [ "$INGRESS_TYPE" == "both" ] || [ "$INGRESS_TYPE" == "internal" ]; then
+              echo ""
+              echo "🔒 Destroying Internal Ingress..."
+              echo ""
+              
+              # Delete manifest resources
+              kubectl delete -f manifests/eks-ingress-nginx-1.13.0-internal.yaml --ignore-not-found 2>&1 || echo "⚠️  Some resources not found"
+              
+              # Force delete stuck resources
+              echo "🧹 Cleaning up Internal namespace..."
+              
+              # Delete Jobs
+              kubectl delete job --all -n ingress-nginx-internal --ignore-not-found --force --grace-period=0 2>/dev/null || true
+              
+              # Delete Pods
+              kubectl delete pods --all -n ingress-nginx-internal --ignore-not-found --force --grace-period=0 2>/dev/null || true
+              
+              # Remove finalizers if namespace is stuck
+              kubectl get namespace ingress-nginx-internal -o json 2>/dev/null | \
+                jq '.spec.finalizers = []' | \
+                kubectl replace --raw "/api/v1/namespaces/ingress-nginx-internal/finalize" -f - 2>/dev/null || true
+              
+              # Wait for namespace deletion
+              echo "⏳ Waiting for Internal namespace deletion..."
+              kubectl wait --for=delete namespace/ingress-nginx-internal --timeout=60s 2>/dev/null || echo "⚠️  Namespace may still be terminating"
+              
+              echo "✅ Internal Ingress destroyed"
+            fi
+            
+            # Verify deletion
+            echo ""
+            echo "🔍 Verifying deletion..."
+            echo ""
+            
+            if [ "$INGRESS_TYPE" == "both" ] || [ "$INGRESS_TYPE" == "external" ]; then
+              if kubectl get namespace ingress-nginx &>/dev/null; then
+                echo "⚠️  External namespace still exists (may be terminating)"
+              else
+                echo "✅ External namespace deleted"
+              fi
+            fi
+            
+            if [ "$INGRESS_TYPE" == "both" ] || [ "$INGRESS_TYPE" == "internal" ]; then
+              if kubectl get namespace ingress-nginx-internal &>/dev/null; then
+                echo "⚠️  Internal namespace still exists (may be terminating)"
+              else
+                echo "✅ Internal namespace deleted"
+              fi
+            fi
+            
+            SUCCESS=$((SUCCESS + 1))
+          done
+          
+          echo ""
+          echo "=================================================="
+          echo "📊 Summary"
+          echo "=================================================="
+          echo ""
+          echo "Total clusters processed: $TOTAL"
+          echo "Successful: $SUCCESS"
+          echo "Failed: $FAILED"
+          echo ""
+          
+          if [ $FAILED -gt 0 ]; then
+            echo "⚠️  Some clusters failed. Check logs above."
+            exit 1
+          else
+            echo "✅ All clusters processed successfully!"
+          fi
+      
+      - name: Summary
+        if: always()
+        run: |
+          echo ""
+          echo "=================================================="
+          echo "📋 Destruction Summary"
+          echo "=================================================="
+          echo ""
+          echo "Workflow: Ingress NGINX Destruction"
+          echo "Clusters: ${{ github.event.inputs.clusters }}"
+          echo "Ingress Type: ${{ github.event.inputs.ingress_type }}"
+          echo "Status: ${{ job.status }}"
+          echo ""
+          
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "✅ Destruction completed successfully!"
+            echo ""
+            echo "⚠️  Note: LoadBalancers may take a few minutes to be fully removed from AWS."
+          else
+            echo "❌ Destruction failed. Check logs above."
+          fi
+          echo ""
