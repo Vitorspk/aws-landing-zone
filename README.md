@@ -274,7 +274,7 @@ Inputs:
 **Via kubectl (manual):**
 ```bash
 # Connect to cluster
-aws eks update-kubeconfig --name eks-dev --region sa-east-1
+aws eks update-kubeconfig --name <YOUR_CLUSTER_NAME> --region <YOUR_AWS_REGION>
 
 # Apply manifests
 kubectl apply -f manifests/eks-ingress-nginx-1.13.0-external.yaml
