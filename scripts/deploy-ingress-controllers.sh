@@ -64,6 +64,59 @@ if ! kubectl wait --for=condition=Ready nodes --all --timeout=300s; then
     fail_critical "Cluster nodes are not ready. Check cluster and node group status."
 fi
 
+# Verify network connectivity to external registries
+echo "2.5. Verifying network connectivity to external registries..."
+MAX_RETRIES=12
+RETRY_DELAY=10
+CONNECTIVITY_OK=false
+
+for i in $(seq 1 $MAX_RETRIES); do
+    echo "    Attempt $i/$MAX_RETRIES: Testing connectivity to registry.k8s.io..."
+
+    # Create a temporary pod to test connectivity
+    cat <<EOF | kubectl apply -f - >/dev/null 2>&1
+apiVersion: v1
+kind: Pod
+metadata:
+  name: connectivity-test
+  namespace: default
+spec:
+  restartPolicy: Never
+  containers:
+  - name: test
+    image: busybox:1.36
+    command: ['sh', '-c', 'nslookup registry.k8s.io && wget -T 10 -O /dev/null https://registry.k8s.io 2>&1 || true']
+EOF
+
+    # Wait for pod to complete
+    sleep 5
+
+    # Check if connectivity test succeeded
+    if kubectl wait --for=condition=Ready pod/connectivity-test -n default --timeout=30s >/dev/null 2>&1; then
+        # Pod became ready, but busybox might not support HTTPS, so just check DNS works
+        if kubectl logs connectivity-test -n default 2>/dev/null | grep -q "registry.k8s.io"; then
+            echo -e "${GREEN}    ✓ DNS resolution working for registry.k8s.io${NC}"
+            CONNECTIVITY_OK=true
+            kubectl delete pod connectivity-test -n default --ignore-not-found=true >/dev/null 2>&1
+            break
+        fi
+    fi
+
+    # Clean up failed pod
+    kubectl delete pod connectivity-test -n default --ignore-not-found=true >/dev/null 2>&1
+
+    if [ $i -lt $MAX_RETRIES ]; then
+        echo "    Network not ready yet, waiting ${RETRY_DELAY}s before retry..."
+        sleep $RETRY_DELAY
+    fi
+done
+
+if [ "$CONNECTIVITY_OK" = false ]; then
+    echo -e "${YELLOW}⚠️  WARNING: Could not verify connectivity to registry.k8s.io${NC}"
+    echo -e "${YELLOW}    Proceeding anyway, but image pulls may fail.${NC}"
+    echo -e "${YELLOW}    If deployment fails, wait a few minutes for NAT gateway to stabilize and retry.${NC}"
+fi
+
 # Create namespaces
 echo "3. Creating namespaces..."
 if ! kubectl create namespace ingress-nginx --dry-run=client -o yaml | kubectl apply -f -; then
@@ -176,12 +229,12 @@ verify_secret_exists() {
     fi
 }
 
-echo "5.5.1. Waiting for external admission jobs..."
-wait_for_job "ingress-nginx-admission-create" "ingress-nginx" "300s" "external"
+echo "5.5.1. Waiting for external admission jobs (extended timeout for image pull)..."
+wait_for_job "ingress-nginx-admission-create" "ingress-nginx" "600s" "external"
 wait_for_job "ingress-nginx-admission-patch" "ingress-nginx" "60s" "external"
 
-echo "5.5.2. Waiting for internal admission jobs..."
-wait_for_job "ingress-nginx-internal-admission-create" "ingress-nginx-internal" "300s" "internal"
+echo "5.5.2. Waiting for internal admission jobs (extended timeout for image pull)..."
+wait_for_job "ingress-nginx-internal-admission-create" "ingress-nginx-internal" "600s" "internal"
 wait_for_job "ingress-nginx-internal-admission-patch" "ingress-nginx-internal" "60s" "internal"
 
 echo "5.5.3. Verifying admission secrets were created..."
