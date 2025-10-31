@@ -85,21 +85,18 @@ spec:
   containers:
   - name: test
     image: busybox:1.36
-    command: ['sh', '-c', 'nslookup registry.k8s.io && wget -T 10 -O /dev/null https://registry.k8s.io 2>&1 || true']
+    command: ['sh', '-c', 'nslookup registry.k8s.io | grep -A 1 "Name:" | grep -q "Address:"']
 EOF
 
     # Wait for pod to complete
     sleep 5
 
-    # Check if connectivity test succeeded
-    if kubectl wait --for=condition=Ready pod/connectivity-test -n default --timeout=30s >/dev/null 2>&1; then
-        # Pod became ready, but busybox might not support HTTPS, so just check DNS works
-        if kubectl logs connectivity-test -n default 2>/dev/null | grep -q "registry.k8s.io"; then
-            echo -e "${GREEN}    ✓ DNS resolution working for registry.k8s.io${NC}"
-            CONNECTIVITY_OK=true
-            kubectl delete pod connectivity-test -n default --ignore-not-found=true >/dev/null 2>&1
-            break
-        fi
+    # Check if connectivity test succeeded by waiting for the pod to enter the 'Succeeded' phase
+    if kubectl wait pod/connectivity-test --for=jsonpath='{.status.phase}'=Succeeded -n default --timeout=30s >/dev/null 2>&1; then
+        echo -e "${GREEN}    ✓ DNS resolution working for registry.k8s.io${NC}"
+        CONNECTIVITY_OK=true
+        kubectl delete pod connectivity-test -n default --ignore-not-found=true >/dev/null 2>&1
+        break
     fi
 
     # Clean up failed pod
