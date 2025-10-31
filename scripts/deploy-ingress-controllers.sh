@@ -166,47 +166,117 @@ wait_for_job() {
 
     echo "--> Waiting for job '$job_name' in namespace '$namespace' (timeout: $timeout)..."
 
+    # Convert timeout string (e.g., "600s") to seconds
+    local timeout_seconds="${timeout%s}"
+    local start_time=$(date +%s)
+    local job_found=false
+    local job_completed=false
+
     # First, wait for the job to exist (handle race condition after kubectl apply)
     local max_retries=30
     local retry=0
     while [ $retry -lt $max_retries ]; do
         if kubectl get "job/$job_name" -n "$namespace" &>/dev/null; then
             echo "    Job '$job_name' found, waiting for completion..."
+            job_found=true
             break
         fi
         retry=$((retry + 1))
         if [ $retry -eq $max_retries ]; then
-            echo -e "${RED}Error: Job '$job_name' was not created after ${max_retries} seconds.${NC}"
-            echo "Checking all jobs in namespace '$namespace':"
-            kubectl get jobs -n "$namespace" || true
-            fail_critical "Admission webhook job '$job_name' was not created for $ingress_type ingress."
+            echo -e "${YELLOW}Warning: Job '$job_name' not found after ${max_retries} seconds.${NC}"
+            echo "    This could mean the job completed and was cleaned up (ttlSecondsAfterFinished=0)."
+            echo "    Checking for pods with job label..."
+            break
         fi
         sleep 1
     done
 
-    # Now wait for the job to complete
-    if ! kubectl wait --for=condition=complete --timeout="$timeout" \
-      "job/$job_name" -n "$namespace" 2>/dev/null; then
-        echo -e "${RED}Error: Job '$job_name' did not complete within $timeout.${NC}"
-        echo ""
-        echo "=== Job Details ==="
-        kubectl describe "job/$job_name" -n "$namespace" || true
-        echo ""
-        echo "=== Pod Status ==="
-        local pod_name=$(kubectl get pods -n "$namespace" -l "job-name=$job_name" --sort-by=.metadata.creationTimestamp -o jsonpath='{.items[-1:].metadata.name}' 2>/dev/null || echo "")
-        if [ -n "$pod_name" ]; then
-            echo "Pod: $pod_name"
-            kubectl get pod "$pod_name" -n "$namespace" -o wide || true
+    # Check if job completed by looking at pods (handles ttlSecondsAfterFinished=0 case)
+    local pod_name=$(kubectl get pods -n "$namespace" -l "job-name=$job_name" --sort-by=.metadata.creationTimestamp -o jsonpath='{.items[-1:].metadata.name}' 2>/dev/null || echo "")
+
+    if [ -n "$pod_name" ]; then
+        echo "    Found pod '$pod_name' for job '$job_name', checking status..."
+
+        # Wait for pod to reach a terminal state (Succeeded or Failed)
+        while true; do
+            local current_time=$(date +%s)
+            local elapsed=$((current_time - start_time))
+
+            if [ $elapsed -gt $timeout_seconds ]; then
+                echo -e "${RED}Error: Job '$job_name' did not complete within $timeout.${NC}"
+                echo ""
+                echo "=== Pod Status ==="
+                kubectl get pod "$pod_name" -n "$namespace" -o wide || true
+                echo ""
+                echo "=== Pod Events ==="
+                kubectl describe pod "$pod_name" -n "$namespace" | grep -A 20 "Events:" || true
+                echo ""
+                echo "=== Pod Logs ==="
+                kubectl logs "$pod_name" -n "$namespace" --tail=50 || echo "No logs available"
+                fail_critical "Admission webhook job '$job_name' timed out for $ingress_type ingress."
+            fi
+
+            local pod_phase=$(kubectl get pod "$pod_name" -n "$namespace" -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+
+            if [ "$pod_phase" = "Succeeded" ]; then
+                echo -e "${GREEN}    ✓ Job '$job_name' completed successfully${NC}"
+                job_completed=true
+                break
+            elif [ "$pod_phase" = "Failed" ]; then
+                echo -e "${RED}Error: Job '$job_name' failed.${NC}"
+                echo ""
+                echo "=== Pod Status ==="
+                kubectl get pod "$pod_name" -n "$namespace" -o wide || true
+                echo ""
+                echo "=== Pod Events ==="
+                kubectl describe pod "$pod_name" -n "$namespace" | grep -A 20 "Events:" || true
+                echo ""
+                echo "=== Pod Logs ==="
+                kubectl logs "$pod_name" -n "$namespace" --tail=50 || echo "No logs available"
+                fail_critical "Admission webhook job '$job_name' failed for $ingress_type ingress."
+            elif [ "$pod_phase" = "Pending" ] || [ "$pod_phase" = "Running" ]; then
+                # Still in progress
+                sleep 2
+            else
+                echo -e "${YELLOW}Warning: Unexpected pod phase '$pod_phase' for pod '$pod_name'${NC}"
+                sleep 2
+            fi
+        done
+    elif [ "$job_found" = true ]; then
+        # Job exists, use kubectl wait
+        if ! kubectl wait --for=condition=complete --timeout="$timeout" \
+          "job/$job_name" -n "$namespace" 2>/dev/null; then
+            echo -e "${RED}Error: Job '$job_name' did not complete within $timeout.${NC}"
             echo ""
-            echo "=== Pod Events ==="
-            kubectl describe pod "$pod_name" -n "$namespace" | grep -A 20 "Events:" || true
+            echo "=== Job Details ==="
+            kubectl describe "job/$job_name" -n "$namespace" || true
             echo ""
-            echo "=== Pod Logs ==="
-            kubectl logs "$pod_name" -n "$namespace" --tail=50 || echo "No logs available"
-        else
-            echo "No pod found for job '$job_name'"
+            echo "=== Pod Status ==="
+            pod_name=$(kubectl get pods -n "$namespace" -l "job-name=$job_name" --sort-by=.metadata.creationTimestamp -o jsonpath='{.items[-1:].metadata.name}' 2>/dev/null || echo "")
+            if [ -n "$pod_name" ]; then
+                echo "Pod: $pod_name"
+                kubectl get pod "$pod_name" -n "$namespace" -o wide || true
+                echo ""
+                echo "=== Pod Events ==="
+                kubectl describe pod "$pod_name" -n "$namespace" | grep -A 20 "Events:" || true
+                echo ""
+                echo "=== Pod Logs ==="
+                kubectl logs "$pod_name" -n "$namespace" --tail=50 || echo "No logs available"
+            else
+                echo "No pod found for job '$job_name'"
+            fi
+            fail_critical "Admission webhook job '$job_name' failed for $ingress_type ingress."
         fi
-        fail_critical "Admission webhook job '$job_name' failed for $ingress_type ingress."
+        job_completed=true
+    else
+        # Neither job nor pod found
+        echo -e "${RED}Error: Neither job nor pod found for '$job_name'.${NC}"
+        echo "Checking all jobs in namespace '$namespace':"
+        kubectl get jobs -n "$namespace" || true
+        echo ""
+        echo "Checking all pods in namespace '$namespace':"
+        kubectl get pods -n "$namespace" || true
+        fail_critical "Admission webhook job '$job_name' was not created for $ingress_type ingress."
     fi
 }
 
