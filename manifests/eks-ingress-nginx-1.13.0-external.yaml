@@ -469,6 +469,33 @@ spec:
                   - controller
               topologyKey: kubernetes.io/hostname
       automountServiceAccountToken: true
+      initContainers:
+      - name: wait-for-webhook-secret
+        image: registry.k8s.io/ingress-nginx/kube-webhook-certgen:v1.6.0@sha256:c9f76a75fd00e975416ea1b73300efd413116de0de8570346ed90766c5b5cefb
+        command:
+        - sh
+        - -c
+        - |
+          echo "Waiting for webhook secret to be created..."
+          until kubectl get secret ingress-nginx-external-admission -n ${POD_NAMESPACE} 2>/dev/null; do
+            echo "Secret not found, waiting 5 seconds..."
+            sleep 5
+          done
+          echo "Secret found! Proceeding with controller startup..."
+        env:
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+          runAsGroup: 65532
+          runAsNonRoot: true
+          runAsUser: 65532
       containers:
       - args:
         - /nginx-ingress-controller
