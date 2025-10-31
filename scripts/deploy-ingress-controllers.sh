@@ -99,6 +99,59 @@ if ! kubectl apply -f "$REPO_ROOT/manifests/eks-ingress-nginx-1.13.0-internal.ya
     fail_critical "Failed to apply internal NGINX manifest."
 fi
 
+# CRITICAL: Wait for admission webhook jobs to complete BEFORE waiting for deployments
+echo "5.5. Waiting for admission webhook jobs to complete..."
+
+# Helper function to wait for a Kubernetes job to complete and fail if it doesn't.
+# Arguments:
+#   $1: Job name
+#   $2: Namespace
+#   $3: Timeout (e.g., "300s")
+#   $4: Ingress type for error message (e.g., "external")
+wait_for_job() {
+    local job_name="$1"
+    local namespace="$2"
+    local timeout="$3"
+    local ingress_type="$4"
+    echo "--> Waiting for job '$job_name' in namespace '$namespace' (timeout: $timeout)..."
+    if ! kubectl wait --for=condition=complete --timeout="$timeout" \
+      "job/$job_name" -n "$namespace" 2>/dev/null; then
+        echo -e "${RED}Error: Job '$job_name' did not complete within $timeout.${NC}"
+        kubectl describe "job/$job_name" -n "$namespace" || true
+        fail_critical "Admission webhook job '$job_name' failed for $ingress_type ingress."
+    fi
+}
+
+# Helper function to verify a Kubernetes secret exists.
+# Arguments:
+#   $1: Secret name
+#   $2: Namespace
+#   $3: Ingress type for error message (e.g., "external")
+verify_secret_exists() {
+    local secret_name="$1"
+    local namespace="$2"
+    local ingress_type="$3"
+    if ! kubectl get secret "$secret_name" -n "$namespace" &>/dev/null; then
+        echo -e "${RED}ERROR: Secret '$secret_name' was not created!${NC}"
+        kubectl get secrets -n "$namespace"
+        fail_critical "Admission webhook secret not created for $ingress_type ingress"
+    fi
+}
+
+echo "5.5.1. Waiting for external admission jobs..."
+wait_for_job "ingress-nginx-admission-create" "ingress-nginx" "300s" "external"
+wait_for_job "ingress-nginx-admission-patch" "ingress-nginx" "60s" "external"
+
+echo "5.5.2. Waiting for internal admission jobs..."
+wait_for_job "ingress-nginx-internal-admission-create" "ingress-nginx-internal" "300s" "internal"
+wait_for_job "ingress-nginx-internal-admission-patch" "ingress-nginx-internal" "60s" "internal"
+
+echo "5.5.3. Verifying admission secrets were created..."
+verify_secret_exists "ingress-nginx-admission" "ingress-nginx" "external"
+verify_secret_exists "ingress-nginx-internal-admission" "ingress-nginx-internal" "internal"
+
+echo -e "${GREEN}✓ Admission secrets created successfully${NC}"
+
 # Wait for deployments
 echo "6. Waiting for deployments to be ready (timeout: 10 minutes)..."
 
