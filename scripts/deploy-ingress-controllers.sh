@@ -143,7 +143,7 @@ wait_for_job() {
         kubectl describe "job/$job_name" -n "$namespace" || true
         echo ""
         echo "=== Pod Status ==="
-        local pod_name=$(kubectl get pods -n "$namespace" -l "job-name=$job_name" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+        local pod_name=$(kubectl get pods -n "$namespace" -l "job-name=$job_name" --sort-by=.metadata.creationTimestamp -o jsonpath='{.items[-1:].metadata.name}' 2>/dev/null || echo "")
         if [ -n "$pod_name" ]; then
             echo "Pod: $pod_name"
             kubectl get pod "$pod_name" -n "$namespace" -o wide || true
