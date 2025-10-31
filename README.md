@@ -25,7 +25,7 @@ GitHub Actions → deploy-ingress-nginx
 
 ### 3. Access Your Clusters
 ```bash
-aws eks update-kubeconfig --name eks-dev --region sa-east-1
+aws eks update-kubeconfig --name <YOUR_CLUSTER_NAME> --region <YOUR_AWS_REGION>
 kubectl get nodes
 ```
 
