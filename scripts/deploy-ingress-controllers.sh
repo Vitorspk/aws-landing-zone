@@ -113,7 +113,28 @@ wait_for_job() {
     local namespace="$2"
     local timeout="$3"
     local ingress_type="$4"
+
     echo "--> Waiting for job '$job_name' in namespace '$namespace' (timeout: $timeout)..."
+
+    # First, wait for the job to exist (handle race condition after kubectl apply)
+    local max_retries=30
+    local retry=0
+    while [ $retry -lt $max_retries ]; do
+        if kubectl get "job/$job_name" -n "$namespace" &>/dev/null; then
+            echo "    Job '$job_name' found, waiting for completion..."
+            break
+        fi
+        retry=$((retry + 1))
+        if [ $retry -eq $max_retries ]; then
+            echo -e "${RED}Error: Job '$job_name' was not created after ${max_retries} seconds.${NC}"
+            echo "Checking all jobs in namespace '$namespace':"
+            kubectl get jobs -n "$namespace" || true
+            fail_critical "Admission webhook job '$job_name' was not created for $ingress_type ingress."
+        fi
+        sleep 1
+    done
+
+    # Now wait for the job to complete
     if ! kubectl wait --for=condition=complete --timeout="$timeout" \
       "job/$job_name" -n "$namespace" 2>/dev/null; then
         echo -e "${RED}Error: Job '$job_name' did not complete within $timeout.${NC}"
