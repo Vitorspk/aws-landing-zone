@@ -622,8 +622,8 @@ metadata:
   name: ingress-nginx-admission-create
   namespace: ingress-nginx
 spec:
-  activeDeadlineSeconds: 300
-  backoffLimit: 3
+  activeDeadlineSeconds: 600
+  backoffLimit: 6
   template:
     metadata:
       labels:
