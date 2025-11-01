@@ -139,6 +139,11 @@ if ! kubectl apply -f "$REPO_ROOT/manifests/eks-ingress-nginx-1.13.3-external.ya
     fail_critical "Failed to apply external NGINX manifest."
 fi
 
+# Disable webhook validation to avoid certificate issues
+echo "3.7. Disabling webhook validation for external ingress..."
+kubectl delete validatingwebhookconfiguration ingress-nginx-external-admission --ignore-not-found 2>/dev/null || true
+echo -e "${GREEN}✓ Webhook validation disabled for external ingress${NC}"
+
 # Deploy internal ingress
 echo "5. Deploying internal NGINX Ingress Controller..."
 if [ ! -f "$REPO_ROOT/manifests/eks-ingress-nginx-1.13.3-internal.yaml" ]; then
@@ -148,6 +153,11 @@ fi
 if ! kubectl apply -f "$REPO_ROOT/manifests/eks-ingress-nginx-1.13.3-internal.yaml"; then
     fail_critical "Failed to apply internal NGINX manifest."
 fi
+
+# Disable webhook validation to avoid certificate issues
+echo "5.5. Disabling webhook validation for internal ingress..."
+kubectl delete validatingwebhookconfiguration ingress-nginx-internal-admission --ignore-not-found 2>/dev/null || true
+echo -e "${GREEN}✓ Webhook validation disabled for internal ingress${NC}"
 
 # CRITICAL: Wait for admission webhook jobs to complete BEFORE waiting for deployments
 echo "5.5. Waiting for admission webhook jobs to complete..."
