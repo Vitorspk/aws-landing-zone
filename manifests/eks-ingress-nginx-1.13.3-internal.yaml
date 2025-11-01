@@ -447,6 +447,7 @@ metadata:
   namespace: ingress-nginx-internal
 spec:
   minReadySeconds: 0
+  replicas: 1
   revisionHistoryLimit: 10
   selector:
     matchLabels:
@@ -478,6 +479,8 @@ spec:
         - --validating-webhook=:8443
         - --validating-webhook-certificate=/usr/local/certificates/cert
         - --validating-webhook-key=/usr/local/certificates/key
+        - --enable-metrics=true
+        - --healthz-port=10256
         env:
         - name: POD_NAME
           valueFrom:
@@ -579,6 +582,8 @@ metadata:
   name: ingress-nginx-admission-create
   namespace: ingress-nginx-internal
 spec:
+  activeDeadlineSeconds: 600
+  backoffLimit: 6
   template:
     metadata:
       labels:
@@ -633,6 +638,8 @@ metadata:
   name: ingress-nginx-admission-patch
   namespace: ingress-nginx-internal
 spec:
+  activeDeadlineSeconds: 120
+  backoffLimit: 3
   template:
     metadata:
       labels:
