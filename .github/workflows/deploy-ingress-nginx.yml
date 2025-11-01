@@ -145,7 +145,7 @@ jobs:
                 # Apply External
                 if [ "$INGRESS_TYPE" == "both" ] || [ "$INGRESS_TYPE" == "external" ]; then
                   echo "🌐 Applying External Ingress..."
-                  if kubectl apply -f manifests/eks-ingress-nginx-1.13.0-external.yaml --validate=false; then
+                  if kubectl apply -f manifests/eks-ingress-nginx-1.13.3-external.yaml --validate=false; then
                     echo "✅ External Ingress applied successfully"
                   else
                     echo "❌ Failed to apply External Ingress"
@@ -176,8 +176,8 @@ jobs:
                   if [ "$INGRESS_TYPE" == "both" ] || [ "$INGRESS_TYPE" == "external" ]; then
                     echo "⏳ Waiting for External Ingress pods..."
                     kubectl wait --for=condition=ready pod \
-                      -l app.kubernetes.io/name=ingress-nginx \
-                      -n ingress-nginx \
+                      -l app.kubernetes.io/name=ingress-nginx-external \
+                      -n ingress-nginx-external \
                       --timeout=300s || echo "⚠️  Timeout waiting for External pods"
                   fi
                   
@@ -196,10 +196,10 @@ jobs:
                   # Show status
                   if [ "$INGRESS_TYPE" == "both" ] || [ "$INGRESS_TYPE" == "external" ]; then
                     echo "External Ingress:"
-                    kubectl get pods -n ingress-nginx -l app.kubernetes.io/name=ingress-nginx
+                    kubectl get pods -n ingress-nginx-external -l app.kubernetes.io/name=ingress-nginx-external
                     echo ""
                     echo "External LoadBalancer:"
-                    kubectl get svc -n ingress-nginx ingress-nginx-controller -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' || echo "Pending..."
+                    kubectl get svc -n ingress-nginx-external ingress-nginx-controller -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' || echo "Pending..."
                     echo ""
                   fi
                   
@@ -225,10 +225,10 @@ jobs:
                 # Delete External
                 if [ "$INGRESS_TYPE" == "both" ] || [ "$INGRESS_TYPE" == "external" ]; then
                   echo "🌐 Deleting External Ingress..."
-                  kubectl delete -f manifests/eks-ingress-nginx-1.13.0-external.yaml --ignore-not-found || echo "⚠️  Some resources not found"
+                  kubectl delete -f manifests/eks-ingress-nginx-1.13.3-external.yaml --ignore-not-found || echo "⚠️  Some resources not found"
                   
                   # Cleanup Jobs
-                  kubectl delete job --all -n ingress-nginx --ignore-not-found 2>/dev/null || true
+                  kubectl delete job --all -n ingress-nginx-external --ignore-not-found 2>/dev/null || true
                   
                   echo "✅ External Ingress deleted"
                 fi
@@ -257,13 +257,13 @@ jobs:
                   echo "=== External Ingress ==="
                   echo ""
                   echo "Pods:"
-                  kubectl get pods -n ingress-nginx -l app.kubernetes.io/name=ingress-nginx 2>/dev/null || echo "Not deployed"
+                  kubectl get pods -n ingress-nginx-external -l app.kubernetes.io/name=ingress-nginx-external 2>/dev/null || echo "Not deployed"
                   echo ""
                   echo "Service:"
-                  kubectl get svc -n ingress-nginx ingress-nginx-controller 2>/dev/null || echo "Not deployed"
+                  kubectl get svc -n ingress-nginx-external ingress-nginx-controller 2>/dev/null || echo "Not deployed"
                   echo ""
                   echo "IngressClass:"
-                  kubectl get ingressclass nginx-external 2>/dev/null || echo "Not found"
+                  kubectl get ingressclass nginx 2>/dev/null || echo "Not found"
                   echo ""
                 fi
                 

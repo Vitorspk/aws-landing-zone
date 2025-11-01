@@ -128,25 +128,25 @@ jobs:
               echo ""
               
               # Delete manifest resources
-              kubectl delete -f manifests/eks-ingress-nginx-1.13.0-external.yaml --ignore-not-found 2>&1 || echo "⚠️  Some resources not found"
+              kubectl delete -f manifests/eks-ingress-nginx-1.13.3-external.yaml --ignore-not-found 2>&1 || echo "⚠️  Some resources not found"
               
               # Force delete stuck resources
               echo "🧹 Cleaning up External namespace..."
               
               # Delete Jobs
-              kubectl delete job --all -n ingress-nginx --ignore-not-found --force --grace-period=0 2>/dev/null || true
+              kubectl delete job --all -n ingress-nginx-external --ignore-not-found --force --grace-period=0 2>/dev/null || true
               
               # Delete Pods
-              kubectl delete pods --all -n ingress-nginx --ignore-not-found --force --grace-period=0 2>/dev/null || true
+              kubectl delete pods --all -n ingress-nginx-external --ignore-not-found --force --grace-period=0 2>/dev/null || true
               
               # Remove finalizers if namespace is stuck
-              kubectl get namespace ingress-nginx -o json 2>/dev/null | \
+              kubectl get namespace ingress-nginx-external -o json 2>/dev/null | \
                 jq '.spec.finalizers = []' | \
-                kubectl replace --raw "/api/v1/namespaces/ingress-nginx/finalize" -f - 2>/dev/null || true
+                kubectl replace --raw "/api/v1/namespaces/ingress-nginx-external/finalize" -f - 2>/dev/null || true
               
               # Wait for namespace deletion
               echo "⏳ Waiting for External namespace deletion..."
-              kubectl wait --for=delete namespace/ingress-nginx --timeout=60s 2>/dev/null || echo "⚠️  Namespace may still be terminating"
+              kubectl wait --for=delete namespace/ingress-nginx-external --timeout=60s 2>/dev/null || echo "⚠️  Namespace may still be terminating"
               
               echo "✅ External Ingress destroyed"
             fi
@@ -187,7 +187,7 @@ jobs:
             echo ""
             
             if [ "$INGRESS_TYPE" == "both" ] || [ "$INGRESS_TYPE" == "external" ]; then
-              if kubectl get namespace ingress-nginx &>/dev/null; then
+              if kubectl get namespace ingress-nginx-external &>/dev/null; then
                 echo "⚠️  External namespace still exists (may be terminating)"
               else
                 echo "✅ External namespace deleted"
