@@ -111,13 +111,21 @@ rules:
   verbs:
   - create
 - apiGroups:
-  - coordination.k8s.io
+  - ""
   resources:
   - events
-  - ingress-controller-leader
   verbs:
   - create
   - patch
+- apiGroups:
+  - coordination.k8s.io
+  resourceNames:
+  - ingress-nginx-internal-leader
+  resources:
+  - leases
+  verbs:
+  - get
+  - update
 - apiGroups:
   - discovery.k8s.io
   resources:
