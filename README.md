@@ -277,8 +277,8 @@ Inputs:
 aws eks update-kubeconfig --name <YOUR_CLUSTER_NAME> --region <YOUR_AWS_REGION>
 
 # Apply manifests
-kubectl apply -f manifests/eks-ingress-nginx-1.13.0-external.yaml
-kubectl apply -f manifests/eks-ingress-nginx-1.13.0-internal.yaml
+kubectl apply -f manifests/eks-ingress-nginx-1.13.3-external.yaml
+kubectl apply -f manifests/eks-ingress-nginx-1.13.3-internal.yaml
 ```
 
 ### Verify Installation

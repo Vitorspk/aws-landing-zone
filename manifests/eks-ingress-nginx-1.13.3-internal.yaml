@@ -470,7 +470,6 @@ spec:
       automountServiceAccountToken: true
       containers:
       - args:
-      - args:
         - /nginx-ingress-controller
         - --publish-service=$(POD_NAMESPACE)/ingress-nginx-controller
         - --election-id=ingress-nginx-internal-leader

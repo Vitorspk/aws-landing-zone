@@ -158,7 +158,7 @@ jobs:
               echo ""
               
               # Delete manifest resources
-              kubectl delete -f manifests/eks-ingress-nginx-1.13.0-internal.yaml --ignore-not-found 2>&1 || echo "⚠️  Some resources not found"
+              kubectl delete -f manifests/eks-ingress-nginx-1.13.3-internal.yaml --ignore-not-found 2>&1 || echo "⚠️  Some resources not found"
               
               # Force delete stuck resources
               echo "🧹 Cleaning up Internal namespace..."

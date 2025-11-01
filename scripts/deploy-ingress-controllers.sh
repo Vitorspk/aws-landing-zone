@@ -131,21 +131,21 @@ kubectl delete job ingress-nginx-internal-admission-create ingress-nginx-interna
 
 # Deploy external ingress
 echo "4. Deploying external NGINX Ingress Controller..."
-if [ ! -f "$REPO_ROOT/manifests/eks-ingress-nginx-1.13.0-external.yaml" ]; then
-    fail_critical "Manifest file not found: $REPO_ROOT/manifests/eks-ingress-nginx-1.13.0-external.yaml"
+if [ ! -f "$REPO_ROOT/manifests/eks-ingress-nginx-1.13.3-external.yaml" ]; then
+    fail_critical "Manifest file not found: $REPO_ROOT/manifests/eks-ingress-nginx-1.13.3-external.yaml"
 fi
 
-if ! kubectl apply -f "$REPO_ROOT/manifests/eks-ingress-nginx-1.13.0-external.yaml"; then
+if ! kubectl apply -f "$REPO_ROOT/manifests/eks-ingress-nginx-1.13.3-external.yaml"; then
     fail_critical "Failed to apply external NGINX manifest."
 fi
 
 # Deploy internal ingress
 echo "5. Deploying internal NGINX Ingress Controller..."
-if [ ! -f "$REPO_ROOT/manifests/eks-ingress-nginx-1.13.0-internal.yaml" ]; then
-    fail_critical "Manifest file not found: $REPO_ROOT/manifests/eks-ingress-nginx-1.13.0-internal.yaml"
+if [ ! -f "$REPO_ROOT/manifests/eks-ingress-nginx-1.13.3-internal.yaml" ]; then
+    fail_critical "Manifest file not found: $REPO_ROOT/manifests/eks-ingress-nginx-1.13.3-internal.yaml"
 fi
 
-if ! kubectl apply -f "$REPO_ROOT/manifests/eks-ingress-nginx-1.13.0-internal.yaml"; then
+if ! kubectl apply -f "$REPO_ROOT/manifests/eks-ingress-nginx-1.13.3-internal.yaml"; then
     fail_critical "Failed to apply internal NGINX manifest."
 fi
 
