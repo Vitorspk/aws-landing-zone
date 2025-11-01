@@ -7,7 +7,7 @@
 # Follow the prompts and provide the required information
 # ==============================================================================
 
-set -e
+set -o pipefail
 
 # Colors
 GREEN='\033[0;32m'
@@ -55,7 +55,13 @@ if [ "$CERT_OPTION" == "2" ]; then
       --region $REGION \
       --tags Key=Name,Value="$DOMAIN-wildcard" Key=ManagedBy,Value=Script \
       --query 'CertificateArn' \
-      --output text)
+      --output text 2>&1)
+    
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}❌ Failed to request certificate${NC}"
+        echo "Error: $CERT_ARN"
+        exit 1
+    fi
     
     echo -e "${GREEN}✅ Certificate requested!${NC}"
     echo "ARN: $CERT_ARN"

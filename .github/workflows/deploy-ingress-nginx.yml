@@ -40,7 +40,7 @@ on:
         default: true
 
 env:
-  AWS_REGION: sa-east-1
+  AWS_REGION: ${{ secrets.AWS_DEFAULT_REGION || 'sa-east-1' }}
 
 jobs:
   deploy-ingress:
