@@ -160,7 +160,7 @@ kubectl delete validatingwebhookconfiguration ingress-nginx-internal-admission -
 echo -e "${GREEN}✓ Webhook validation disabled for internal ingress${NC}"
 
 # CRITICAL: Wait for admission webhook jobs to complete BEFORE waiting for deployments
-echo "5.5. Waiting for admission webhook jobs to complete..."
+echo "5.6. Waiting for admission webhook jobs to complete..."
 
 # Helper function to wait for a Kubernetes job to complete and fail if it doesn't.
 # Arguments:
