@@ -247,16 +247,16 @@ Terraform state stored in S3:
 
 NGINX Ingress Controllers are deployed using a **dedicated workflow** (`deploy-ingress-nginx`):
 
-- **External Ingress** (`nginx-external`):
-  - Namespace: `ingress-nginx`
+- **External Ingress** (`nginx`):
+  - Namespace: `ingress-nginx-external`
+  - IngressClass: `nginx`
   - LoadBalancer: Internet-facing NLB
-  - Replicas: 2 (with HPA: 2-5)
   - Use for: Public-facing applications
 
 - **Internal Ingress** (`nginx-internal`):
   - Namespace: `ingress-nginx-internal`
+  - IngressClass: `nginx-internal`
   - LoadBalancer: Internal NLB (VPC only)
-  - Replicas: 1
   - Use for: Internal/private applications
 
 ### Deploy Ingress NGINX
@@ -329,8 +329,10 @@ kind: Ingress
 metadata:
   name: my-app
   annotations:
-    kubernetes.io/ingress.class: nginx-external  # or nginx-internal
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"  # Optional: disable SSL redirect
 spec:
+  ingressClassName: nginx  # For external (public)
+  # ingressClassName: nginx-internal  # For internal (private)
   rules:
   - host: app.example.com
     http:

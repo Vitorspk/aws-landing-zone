@@ -364,12 +364,13 @@ metadata:
   annotations:
     service.beta.kubernetes.io/aws-load-balancer-internal: "false"
     service.beta.kubernetes.io/aws-load-balancer-type: nlb
-    service.beta.kubernetes.io/aws-load-balancer-ssl-negotiation-policy: "ELBSecurityPolicy-TLS13-1-2-2021-06"
-    service.beta.kubernetes.io/aws-load-balancer-ssl-cert: arn:aws:acm:sa-east-1:491292497838:certificate/bc9e9858-3d1b-402b-8c58-775158d120cd
-    service.beta.kubernetes.io/aws-load-balancer-ssl-ports: https
-    service.beta.kubernetes.io/aws-load-balancer-backend-protocol: "http"
-    service.beta.kubernetes.io/aws-load-balancer-connection-idle-timeout: "60"
     service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
+    # Uncomment lines below when you have a valid ACM certificate:
+    # service.beta.kubernetes.io/aws-load-balancer-ssl-negotiation-policy: "ELBSecurityPolicy-TLS13-1-2-2021-06"
+    # service.beta.kubernetes.io/aws-load-balancer-ssl-cert: arn:aws:acm:sa-east-1:491292497838:certificate/bc9e9858-3d1b-402b-8c58-775158d120cd
+    # service.beta.kubernetes.io/aws-load-balancer-ssl-ports: https
+    # service.beta.kubernetes.io/aws-load-balancer-backend-protocol: "http"
+    # service.beta.kubernetes.io/aws-load-balancer-connection-idle-timeout: "60"
   labels:
     app.kubernetes.io/component: controller
     app.kubernetes.io/instance: ingress-nginx-external
@@ -388,12 +389,12 @@ spec:
     name: http
     port: 80
     protocol: TCP
-    targetPort: tohttps
+    targetPort: http
   - appProtocol: https
     name: https
     port: 443
     protocol: TCP
-    targetPort: http
+    targetPort: https
   selector:
     app.kubernetes.io/component: controller
     app.kubernetes.io/instance: ingress-nginx-external
@@ -470,6 +471,8 @@ spec:
         - --validating-webhook=:8443
         - --validating-webhook-certificate=/usr/local/certificates/cert
         - --validating-webhook-key=/usr/local/certificates/key
+        - --enable-metrics=true
+        - --healthz-port=10256
         env:
         - name: POD_NAME
           valueFrom:
