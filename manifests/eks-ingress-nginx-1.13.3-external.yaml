@@ -551,8 +551,7 @@ spec:
           readOnly: true
       dnsPolicy: ClusterFirst
       nodeSelector:
-        kubernetes.io/os: linux
-        NodeGroup: ng-general-01
+        agentpool: ng-agent-01
       serviceAccountName: ingress-nginx-external
       terminationGracePeriodSeconds: 300
       volumes:
@@ -609,8 +608,7 @@ spec:
           seccompProfile:
             type: RuntimeDefault
       nodeSelector:
-        kubernetes.io/os: linux
-        NodeGroup: ng-general-01
+        agentpool: ng-agent-01
       restartPolicy: OnFailure
       serviceAccountName: ingress-nginx-external-admission
   ttlSecondsAfterFinished: 0
@@ -666,8 +664,7 @@ spec:
           seccompProfile:
             type: RuntimeDefault
       nodeSelector:
-        kubernetes.io/os: linux
-        NodeGroup: ng-general-01
+        agentpool: ng-agent-01
       restartPolicy: OnFailure
       serviceAccountName: ingress-nginx-external-admission
   ttlSecondsAfterFinished: 0

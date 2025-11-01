@@ -87,12 +87,6 @@ variable "node_group_disk_size" {
   default     = 50
 }
 
-variable "node_group_labels" {
-  description = "Key-value map of Kubernetes labels"
-  type        = map(string)
-  default     = {}
-}
-
 # ==============================================================================
 # ADDON VERSIONS
 # ==============================================================================

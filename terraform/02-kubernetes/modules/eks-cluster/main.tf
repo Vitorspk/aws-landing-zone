@@ -254,13 +254,9 @@ resource "aws_eks_node_group" "main" {
   capacity_type  = var.node_group_capacity_type
   disk_size      = var.node_group_disk_size
 
-  labels = merge(
-    {
-      Environment = var.environment
-      NodeGroup   = var.node_group_name
-    },
-    var.node_group_labels
-  )
+  labels = {
+    agentpool = "ng-agent-01"
+  }
 
   tags = merge(
     var.tags,
