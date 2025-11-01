@@ -129,6 +129,13 @@ echo "3.5. Cleaning up existing admission jobs..."
 kubectl delete job ingress-nginx-admission-create ingress-nginx-admission-patch -n ingress-nginx-external --ignore-not-found=true 2>/dev/null || true
 kubectl delete job ingress-nginx-internal-admission-create ingress-nginx-internal-admission-patch -n ingress-nginx-internal --ignore-not-found=true 2>/dev/null || true
 
+# Cleanup old IngressClasses to avoid immutable field errors
+echo "3.6. Cleaning up old IngressClasses..."
+kubectl delete ingressclass nginx --ignore-not-found 2>/dev/null || true
+kubectl delete ingressclass nginx-internal --ignore-not-found 2>/dev/null || true
+kubectl delete ingressclass nginx-external --ignore-not-found 2>/dev/null || true
+echo -e "${GREEN}✓ Old IngressClasses cleaned up${NC}"
+
 # Deploy external ingress
 echo "4. Deploying external NGINX Ingress Controller..."
 if [ ! -f "$REPO_ROOT/manifests/eks-ingress-nginx-1.13.3-external.yaml" ]; then
@@ -140,7 +147,7 @@ if ! kubectl apply -f "$REPO_ROOT/manifests/eks-ingress-nginx-1.13.3-external.ya
 fi
 
 # Disable webhook validation to avoid certificate issues
-echo "3.7. Disabling webhook validation for external ingress..."
+echo "4.1. Disabling webhook validation for external ingress..."
 kubectl delete validatingwebhookconfiguration ingress-nginx-external-admission --ignore-not-found 2>/dev/null || true
 echo -e "${GREEN}✓ Webhook validation disabled for external ingress${NC}"
 
@@ -155,12 +162,12 @@ if ! kubectl apply -f "$REPO_ROOT/manifests/eks-ingress-nginx-1.13.3-internal.ya
 fi
 
 # Disable webhook validation to avoid certificate issues
-echo "5.5. Disabling webhook validation for internal ingress..."
+echo "5.1. Disabling webhook validation for internal ingress..."
 kubectl delete validatingwebhookconfiguration ingress-nginx-internal-admission --ignore-not-found 2>/dev/null || true
 echo -e "${GREEN}✓ Webhook validation disabled for internal ingress${NC}"
 
 # CRITICAL: Wait for admission webhook jobs to complete BEFORE waiting for deployments
-echo "5.6. Waiting for admission webhook jobs to complete..."
+echo "5.2. Waiting for admission webhook jobs to complete..."
 
 # Helper function to wait for a Kubernetes job to complete and fail if it doesn't.
 # Arguments:
@@ -306,15 +313,15 @@ verify_secret_exists() {
     fi
 }
 
-echo "5.6.1. Waiting for external admission jobs (extended timeout for image pull)..."
+echo "5.2.1. Waiting for external admission jobs (extended timeout for image pull)..."
 wait_for_job "ingress-nginx-admission-create" "ingress-nginx-external" "600s" "external"
 wait_for_job "ingress-nginx-admission-patch" "ingress-nginx-external" "60s" "external"
 
-echo "5.5.2. Waiting for internal admission jobs (extended timeout for image pull)..."
+echo "5.2.2. Waiting for internal admission jobs (extended timeout for image pull)..."
 wait_for_job "ingress-nginx-internal-admission-create" "ingress-nginx-internal" "600s" "internal"
 wait_for_job "ingress-nginx-internal-admission-patch" "ingress-nginx-internal" "60s" "internal"
 
-echo "5.6.3. Verifying admission secrets were created..."
+echo "5.2.3. Verifying admission secrets were created..."
 verify_secret_exists "ingress-nginx-external-admission" "ingress-nginx-external" "external"
 verify_secret_exists "ingress-nginx-internal-admission" "ingress-nginx-internal" "internal"
 

@@ -130,6 +130,11 @@ jobs:
               # Delete manifest resources
               kubectl delete -f manifests/eks-ingress-nginx-1.13.3-external.yaml --ignore-not-found 2>&1 || echo "⚠️  Some resources not found"
               
+              # Explicitly delete IngressClass (cluster-scoped resource)
+              echo "🧹 Deleting External IngressClass..."
+              kubectl delete ingressclass nginx --ignore-not-found 2>/dev/null || true
+              kubectl delete ingressclass nginx-external --ignore-not-found 2>/dev/null || true
+              
               # Force delete stuck resources
               echo "🧹 Cleaning up External namespace..."
               
@@ -159,6 +164,10 @@ jobs:
               
               # Delete manifest resources
               kubectl delete -f manifests/eks-ingress-nginx-1.13.3-internal.yaml --ignore-not-found 2>&1 || echo "⚠️  Some resources not found"
+              
+              # Explicitly delete IngressClass (cluster-scoped resource)
+              echo "🧹 Deleting Internal IngressClass..."
+              kubectl delete ingressclass nginx-internal --ignore-not-found 2>/dev/null || true
               
               # Force delete stuck resources
               echo "🧹 Cleaning up Internal namespace..."
