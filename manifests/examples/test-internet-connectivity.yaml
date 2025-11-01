@@ -1,0 +1,100 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-internet-connectivity
+  namespace: default
+  labels:
+    app: connectivity-test
+spec:
+  nodeSelector:
+    agentpool: ng-agent-01
+  containers:
+  - name: curl
+    image: curlimages/curl:latest
+    command:
+      - /bin/sh
+      - -c
+      - |
+        echo "=========================================="
+        echo "🧪 Internet Connectivity Test"
+        echo "=========================================="
+        echo ""
+        
+        echo "1. Testing DNS resolution..."
+        nslookup google.com
+        echo ""
+        
+        echo "2. Testing HTTP connectivity..."
+        curl -I https://www.google.com
+        echo ""
+        
+        echo "3. Testing AWS API connectivity..."
+        curl -I https://ec2.sa-east-1.amazonaws.com
+        echo ""
+        
+        echo "4. Testing container registry..."
+        curl -I https://registry.k8s.io
+        echo ""
+        
+        echo "5. Getting public IP (via NAT Gateway)..."
+        curl -s https://ifconfig.me
+        echo ""
+        echo ""
+        
+        echo "✅ If you see responses above, internet access is working!"
+        echo ""
+        echo "Keeping pod alive for manual testing..."
+        sleep 3600
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 100m
+        memory: 128Mi
+  restartPolicy: Never
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-internet-ping
+  namespace: default
+  labels:
+    app: ping-test
+spec:
+  nodeSelector:
+    agentpool: ng-agent-01
+  containers:
+  - name: busybox
+    image: busybox:1.36
+    command:
+      - /bin/sh
+      - -c
+      - |
+        echo "=========================================="
+        echo "🌐 Testing Internet Connectivity via ICMP"
+        echo "=========================================="
+        echo ""
+        
+        echo "Pinging Google DNS (8.8.8.8)..."
+        ping -c 5 8.8.8.8
+        echo ""
+        
+        echo "Pinging Cloudflare DNS (1.1.1.1)..."
+        ping -c 5 1.1.1.1
+        echo ""
+        
+        echo "DNS Resolution Test..."
+        nslookup google.com
+        echo ""
+        
+        echo "✅ Internet connectivity test completed!"
+        sleep 3600
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 100m
+        memory: 128Mi
+  restartPolicy: Never

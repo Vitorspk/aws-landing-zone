@@ -157,7 +157,7 @@ jobs:
                 # Apply Internal
                 if [ "$INGRESS_TYPE" == "both" ] || [ "$INGRESS_TYPE" == "internal" ]; then
                   echo "🔒 Applying Internal Ingress..."
-                  if kubectl apply -f manifests/eks-ingress-nginx-1.13.0-internal.yaml --validate=false; then
+                  if kubectl apply -f manifests/eks-ingress-nginx-1.13.3-internal.yaml --validate=false; then
                     echo "✅ Internal Ingress applied successfully"
                   else
                     echo "❌ Failed to apply Internal Ingress"
@@ -236,7 +236,7 @@ jobs:
                 # Delete Internal
                 if [ "$INGRESS_TYPE" == "both" ] || [ "$INGRESS_TYPE" == "internal" ]; then
                   echo "🔒 Deleting Internal Ingress..."
-                  kubectl delete -f manifests/eks-ingress-nginx-1.13.0-internal.yaml --ignore-not-found || echo "⚠️  Some resources not found"
+                  kubectl delete -f manifests/eks-ingress-nginx-1.13.3-internal.yaml --ignore-not-found || echo "⚠️  Some resources not found"
                   
                   # Cleanup Jobs
                   kubectl delete job --all -n ingress-nginx-internal --ignore-not-found 2>/dev/null || true
