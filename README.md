@@ -2,6 +2,20 @@
 
 Complete AWS infrastructure automation using Terraform and GitHub Actions.
 
+## ⚠️ Security Notice
+
+**Before deploying this infrastructure, please ensure:**
+
+1. 🔐 **Never commit `.tfvars` files with real values** - Use `terraform.tfvars.example` as a template
+2. 🔑 **Always use GitHub Secrets for AWS credentials** - Never hardcode access keys
+3. 🛡️ **Review IAM permissions before applying** - Follow the principle of least privilege
+4. 📝 **Keep sensitive data out of version control** - Check `.gitignore` is properly configured
+5. 🔄 **Use remote state storage** - Terraform state should be in S3, not committed to Git
+
+For detailed security guidelines, see [SECURITY.md](docs/SECURITY.md).
+
+---
+
 ## Quick Start
 
 ### 1. Deploy Core Infrastructure
@@ -56,57 +70,53 @@ aws-landing-zone/
 ├── manifests/            # Kubernetes manifests (Ingress NGINX)
 ├── scripts/              # Utility scripts
 ├── docs/                 # Documentation
-│   ├── INGRESS-NGINX-ARCHITECTURE.md
-│   └── INGRESS-NGINX-IMPLEMENTATION.md
+│   ├── ARCHITECTURE.md
+│   ├── DEPLOYMENT.md
+│   └── SECURITY.md      # Security best practices
 └── .github/workflows/    # GitHub Actions
-    ├── deploy-infrastructure.yml    # Core infrastructure
-    ├── deploy-ingress-nginx.yml     # Ingress deployment
-    ├── destroy-ingress-nginx.yml    # Ingress cleanup
-    └── terraform-ci.yml             # CI/CD validation
+    ├── deploy-infrastructure.yml
+    ├── deploy-ingress-nginx.yml
+    ├── destroy-ingress-nginx.yml
+    └── terraform-ci.yml
 ```
 
-## GitHub Actions Workflows
+## Prerequisites
 
-### Infrastructure Workflows
+Before deploying, ensure you have:
 
-1. **deploy-infrastructure.yml** - Deploy core infrastructure
-   - IAM (Phase 0)
-   - Networking (Phase 1)
-   - Kubernetes/EKS (Phase 2)
-   - Does NOT deploy Ingress NGINX
+- AWS Account with billing enabled
+- AWS IAM user with required permissions
+- GitHub repository secrets configured (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`)
+- Terraform >= 1.5.0
+- AWS CLI installed and configured
 
-2. **destroy-infrastructure.yml** - Destroy infrastructure
-   - Tear down all infrastructure resources
-   - Multi-phase destruction
+## Configuration
 
-### Ingress NGINX Workflows
+### 1. Copy the example configuration files:
+```bash
+cd terraform/00-iam
+cp terraform.tfvars.example terraform.tfvars
+# Edit terraform.tfvars with your AWS region
 
-3. **deploy-ingress-nginx.yml** - Deploy/manage Ingress NGINX
-   - Deploy External and/or Internal Ingress
-   - Multi-cluster support
-   - Automatic validation
-   - Actions: apply, delete, status
+cd ../01-networking
+cp terraform.tfvars.example terraform.tfvars
+# Edit terraform.tfvars with your configuration
 
-4. **destroy-ingress-nginx.yml** - Cleanup Ingress NGINX
-   - Remove Ingress from specific clusters
-   - Requires explicit confirmation
-   - Complete cleanup including stuck resources
+cd ../02-kubernetes
+cp terraform.tfvars.example terraform.tfvars
+# Edit terraform.tfvars with your cluster preferences
+```
 
-### CI/CD Workflows
+### 2. Configure your variables in `terraform.tfvars`:
+```hcl
+region          = "sa-east-1"
+deploy_clusters = "dev,stg"  # or "all"
+```
 
-5. **terraform-ci.yml** - Terraform validation and security scanning
-   - Runs on pull requests
-   - Validates syntax and formatting
-   - Security scanning with tfsec
+### 3. Never commit `terraform.tfvars` to Git!
+(already in `.gitignore`)
 
 ## Deployment
-
-### Prerequisites
-
-- AWS Account ID
-- AWS CLI configured with appropriate credentials
-- GitHub repository secrets configured
-- S3 bucket for Terraform state
 
 ### Manual Deployment
 
@@ -116,22 +126,20 @@ Each phase can be deployed independently:
 # Phase 0: IAM
 cd terraform/00-iam
 terraform init
-terraform apply -var="region=sa-east-1"
+terraform plan
+terraform apply
 
 # Phase 1: Networking
-cd terraform/01-networking
+cd ../01-networking
 terraform init
-terraform apply -var="region=sa-east-1"
+terraform plan
+terraform apply
 
-# Phase 2: Kubernetes - All clusters
-cd terraform/02-kubernetes
+# Phase 2: Kubernetes
+cd ../02-kubernetes
 terraform init
-terraform apply -var="region=sa-east-1"
-
-# Or deploy specific clusters only:
-terraform apply -var="region=sa-east-1" -var="deploy_clusters=dev"
-terraform apply -var="region=sa-east-1" -var="deploy_clusters=dev,stg"
-terraform apply -var="region=sa-east-1" -var="deploy_clusters=prd"
+terraform plan
+terraform apply
 ```
 
 ### Selective Cluster Deployment
@@ -150,41 +158,33 @@ terraform apply -var="region=sa-east-1" -var="deploy_clusters=dev,stg,prd"
 
 # Deploy all clusters (~70-80 min, ~$750-850/month)
 terraform apply -var="region=sa-east-1" -var="deploy_clusters=all"
-# Or simply (all is the default):
-terraform apply -var="region=sa-east-1"
-
-# Deploy only production
-terraform apply -var="region=sa-east-1" -var="deploy_clusters=prd"
-
-# Deploy only sandbox for testing
-terraform apply -var="region=sa-east-1" -var="deploy_clusters=sdx"
 ```
 
 ### Automated Deployment via GitHub Actions
 
-#### 1. Deploy Infrastructure (Core)
+#### 1. Configure GitHub Secrets:
+- Go to repository Settings → Secrets and variables → Actions
+- Add secrets:
+  - `AWS_ACCESS_KEY_ID`
+  - `AWS_SECRET_ACCESS_KEY`
+  - `AWS_DEFAULT_REGION` (optional)
+
+#### 2. Deploy Infrastructure (Core)
 
 Trigger the `deploy-infrastructure` workflow with:
 - **phase**: `all`, `iam`, `networking`, or `kubernetes`
 - **action**: `init`, `plan`, or `apply`
-- **clusters**: `all`, `dev`, `stg`, `prd`, `sdx`, or combinations like `dev,stg`
+- **clusters**: `all`, `dev`, `stg`, `prd`, `sdx`, or combinations
 
-**Note**: This deploys ONLY the core infrastructure (IAM, Networking, EKS clusters). Ingress NGINX is now deployed separately.
+**Note**: This deploys ONLY the core infrastructure (IAM, Networking, EKS clusters).
 
-#### 2. Deploy Ingress NGINX (After Infrastructure)
+#### 3. Deploy Ingress NGINX (After Infrastructure)
 
 Trigger the `deploy-ingress-nginx` workflow with:
 - **clusters**: `all`, `dev`, `stg`, `prd`, `sdx`, or combinations
 - **ingress_type**: `both`, `external`, or `internal`
 - **action**: `apply`, `delete`, or `status`
-- **validate**: `true` or `false` (automatic validation after deploy)
-
-This workflow is **separate** from infrastructure deployment, allowing you to:
-- Deploy/update Ingress independently (~5 min vs 30 min for full infra)
-- Choose specific clusters and ingress types
-- Quickly rollback or update Ingress versions
-
-### Post-Deployment: Access Clusters
+- **validate**: `true` or `false`
 
 ## Environments
 
@@ -200,28 +200,28 @@ This workflow is **separate** from infrastructure deployment, allowing you to:
 - ✅ Centralized IAM management
 - ✅ Reusable IAM Roles across phases
 - ✅ Private EKS clusters with IRSA (IAM Roles for Service Accounts)
-- ✅ NGINX Ingress Controllers (external + internal) auto-deployed
-- ✅ Selective cluster deployment (dev, stg, prd, sdx, or any combination)
+- ✅ NGINX Ingress Controllers (external + internal)
+- ✅ Selective cluster deployment
 - ✅ Automated validation and security scanning
 - ✅ Multi-AZ deployment for high availability
-- ✅ Flexible region configuration via variables
+- ✅ Flexible region configuration
 
 ## Configuration
 
 ### Region Configuration
 
-The AWS region is **configurable** and not hardcoded. You can set it in three ways:
+The AWS region is **configurable** and not hardcoded. Set it via:
 
-1. **GitHub Secrets** (for CI/CD): Set `AWS_DEFAULT_REGION` secret
-2. **Terraform variables**: Pass `-var="region=your-region"` or create `terraform.tfvars`
-3. **Environment variable**: Export `AWS_DEFAULT_REGION=your-region`
+1. **GitHub Secrets** (for CI/CD): `AWS_DEFAULT_REGION`
+2. **Terraform variables**: `-var="region=your-region"` or `terraform.tfvars`
+3. **Environment variable**: `export AWS_DEFAULT_REGION=your-region`
 
 Default region: `sa-east-1` (São Paulo)
 
 ### State Management
 
 Terraform state stored in S3:
-- Bucket: `vschiavo-home-terraform-state`
+- Bucket: `<your-bucket>-terraform-state`
 - IAM prefix: `aws-landing-zone/iam/state`
 - Networking prefix: `aws-landing-zone/networking/state`
 - Kubernetes prefix: `aws-landing-zone/kubernetes/state`
@@ -281,46 +281,6 @@ kubectl apply -f manifests/eks-ingress-nginx-1.13.3-external.yaml
 kubectl apply -f manifests/eks-ingress-nginx-1.13.3-internal.yaml
 ```
 
-### Verify Installation
-
-**Via GitHub Actions:**
-```
-Workflow: deploy-ingress-nginx
-Inputs:
-  - action: status
-```
-
-**Via kubectl:**
-```bash
-# Check external ingress
-kubectl get pods -n ingress-nginx
-kubectl get svc ingress-nginx-controller -n ingress-nginx
-
-# Check internal ingress
-kubectl get pods -n ingress-nginx-internal
-kubectl get svc ingress-nginx-internal-controller -n ingress-nginx-internal
-```
-
-### Update or Destroy Ingress
-
-**Update:**
-```
-Workflow: deploy-ingress-nginx
-Inputs:
-  - clusters: all
-  - ingress_type: both
-  - action: apply
-```
-
-**Destroy:**
-```
-Workflow: destroy-ingress-nginx
-Inputs:
-  - clusters: dev (or all, stg, prd, sdx)
-  - ingress_type: both
-  - confirm: yes (REQUIRED)
-```
-
 ### Usage Example
 
 ```yaml
@@ -329,7 +289,7 @@ kind: Ingress
 metadata:
   name: my-app
   annotations:
-    nginx.ingress.kubernetes.io/ssl-redirect: "false"  # Optional: disable SSL redirect
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
 spec:
   ingressClassName: nginx  # For external (public)
   # ingressClassName: nginx-internal  # For internal (private)
@@ -346,9 +306,29 @@ spec:
               number: 80
 ```
 
+## Documentation
+
+- [ARCHITECTURE.md](docs/ARCHITECTURE.md) - Architecture overview
+- [DEPLOYMENT.md](docs/DEPLOYMENT.md) - Deployment guide
+- [SECURITY.md](docs/SECURITY.md) - Security best practices
+- [GITHUB_SECRETS.md](docs/GITHUB_SECRETS.md) - GitHub Secrets configuration
+
+## Contributing
+
+Contributions are welcome! Please:
+1. Fork the repository
+2. Create a feature branch
+3. Submit a pull request
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
+
 ## Compliance
 
 - CIS AWS Foundations Benchmark aligned
 - AWS Well-Architected Framework principles
 - Cost optimization with right-sizing recommendations
 - Automated compliance scanning via GitHub Actions
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
