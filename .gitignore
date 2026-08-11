@@ -83,6 +83,11 @@ $RECYCLE.BIN/
 # Claude Code
 .claude/
 
+# Superpowers SDD scratch workspace (ledgers, task briefs/reports, review
+# packages) -- not project content. docs/superpowers/specs/ is separate and
+# intentionally tracked (design specs and plans).
+/.superpowers/
+
 # ==============================================================================
 # LOGS & TEMPORARY FILES
 # ==============================================================================
