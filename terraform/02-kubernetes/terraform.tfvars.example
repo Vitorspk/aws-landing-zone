@@ -7,17 +7,11 @@ region = "sa-east-1"
 # ==============================================================================
 # CLUSTER SELECTION
 # ==============================================================================
-# Control which clusters to deploy
-# Set to false to skip cluster creation
+# Comma-separated list of clusters to deploy, or "all" for every cluster.
 
-deploy_clusters = {
-  dev = true   # Deploy dev cluster
-  stg = true   # Deploy stg cluster
-  prd = true   # Deploy prd cluster
-  sdx = true   # Deploy sdx cluster
-}
+deploy_clusters = "all"
 
 # Examples:
-# - Deploy only dev: deploy_clusters = { dev = true, stg = false, prd = false, sdx = false }
-# - Deploy dev + stg: deploy_clusters = { dev = true, stg = true, prd = false, sdx = false }
-# - Deploy all: deploy_clusters = { dev = true, stg = true, prd = true, sdx = true }
+# - Deploy only dev: deploy_clusters = "dev"
+# - Deploy dev + stg: deploy_clusters = "dev,stg"
+# - Deploy all: deploy_clusters = "all"
