@@ -29,8 +29,10 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Validate confirmation
+        env:
+          CONFIRM_DESTROY: ${{ github.event.inputs.confirm_destroy }}
         run: |
-          if [ "${{ github.event.inputs.confirm_destroy }}" != "DESTROY" ]; then
+          if [ "$CONFIRM_DESTROY" != "DESTROY" ]; then
             echo "❌ Destruction not confirmed. You must type 'DESTROY' (all caps) to confirm."
             exit 1
           fi
