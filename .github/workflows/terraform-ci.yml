@@ -56,11 +56,11 @@ jobs:
       
       - name: Init tflint
         working-directory: terraform/${{ matrix.phase }}
-        run: tflint --init
-      
+        run: tflint --init --config="$GITHUB_WORKSPACE/.tflint.hcl"
+
       - name: Run tflint
         working-directory: terraform/${{ matrix.phase }}
-        run: tflint -f compact
+        run: tflint -f compact --config="$GITHUB_WORKSPACE/.tflint.hcl"
 
   security-scan:
     name: Checkov Security Scan

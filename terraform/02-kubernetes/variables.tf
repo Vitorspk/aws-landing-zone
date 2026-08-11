@@ -48,6 +48,12 @@ variable "kubernetes_version" {
   default     = "1.34"
 }
 
+variable "public_access_cidrs" {
+  description = "CIDR blocks allowed to reach each EKS cluster's public API endpoint. Defaults to open (0.0.0.0/0) because deploy-ingress-nginx.yml runs kubectl from GitHub-hosted runners outside the VPC."
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
+}
+
 variable "clusters" {
   description = "EKS clusters configuration"
   type = map(object({

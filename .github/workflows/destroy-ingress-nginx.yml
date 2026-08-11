@@ -50,7 +50,7 @@ jobs:
       - name: Validate confirmation
         run: |
           if [ "${{ github.event.inputs.confirm }}" != "yes" ]; then
-            echo "❌ Destruction not confirmed. Please type 'yes' to confirm."
+            echo "❌ Destruction not confirmed. Please select 'yes' to confirm."
             exit 1
           fi
           echo "✅ Destruction confirmed"
@@ -65,7 +65,7 @@ jobs:
       - name: Setup kubectl
         uses: azure/setup-kubectl@v4
         with:
-          version: 'v1.36.3'
+          version: 'v1.34.10'
       
       - name: Parse clusters input
         id: parse_clusters
