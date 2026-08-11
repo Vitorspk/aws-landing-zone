@@ -16,7 +16,7 @@
 - Do not write the 5 missing shell scripts (`check-prerequisites.sh`, `setup-backend.sh`, `cleanup-resources.sh`, `complete-reset.sh`, `cleanup-k8s-jobs.sh`) — simplify the Makefile instead.
 - Do not rewrite `docs/PROJECT_SUMMARY.md` — delete it.
 - Follow the existing git workflow: feature branch off `master`, commit per task, push, `gh pr create`, wait for checks, `gh pr merge --squash --delete-branch`.
-- `tflint-ruleset-aws` is **already** configured in both `.tflint.hcl` files (version 0.27.0) — the design spec's PR D item "switch to the AWS tflint ruleset" was based on an incomplete reading of the survey and is dropped from this plan. Only the two files' rule-block inconsistency needs reconciling (see Task D.4).
+- `tflint-ruleset-aws` is **already** configured in both `.tflint.hcl` files (version 0.27.0) — the design spec's PR D item "switch to the AWS tflint ruleset" was based on an incomplete reading of the survey and is dropped from this plan. Only the two files' rule-block inconsistency needs reconciling (see Task 4.4).
 
 ---
 
@@ -24,7 +24,7 @@
 
 **Branch:** `fix/terraform-correctness`
 
-### Task A.1: Add `default = "sa-east-1"` to `region` in all three root modules
+### Task 1.1: Add `default = "sa-east-1"` to `region` in all three root modules
 
 **Files:**
 - Modify: `terraform/00-iam/variables.tf:5-8`
@@ -113,10 +113,10 @@ on a non-interactive runner — the exact bug that caused a multi-hour
 incident on the sibling azure-landing-zone repo."
 ```
 
-### Task A.2: Add `validation` block to `deploy_clusters`
+### Task 1.2: Add `validation` block to `deploy_clusters`
 
 **Files:**
-- Modify: `terraform/02-kubernetes/variables.tf` (the `deploy_clusters` variable, right after Task A.1's edit to this same file)
+- Modify: `terraform/02-kubernetes/variables.tf` (the `deploy_clusters` variable, right after Task 1.1's edit to this same file)
 
 - [ ] **Step 1: Add the validation block**
 
@@ -161,7 +161,7 @@ git add terraform/02-kubernetes/variables.tf
 git commit -m "fix: validate deploy_clusters against known environments"
 ```
 
-### Task A.3: Fix `deploy_clusters` type mismatch in the example tfvars
+### Task 1.3: Fix `deploy_clusters` type mismatch in the example tfvars
 
 **Files:**
 - Modify: `terraform/02-kubernetes/terraform.tfvars.example:13-23`
@@ -223,7 +223,7 @@ git add terraform/02-kubernetes/terraform.tfvars.example
 git commit -m "fix: correct deploy_clusters type in example tfvars (was a map, variable is a string)"
 ```
 
-### Task A.4: Full-module validation sweep, open PR, merge
+### Task 1.4: Full-module validation sweep, open PR, merge
 
 - [ ] **Step 1: Format and validate every module**
 
@@ -257,7 +257,7 @@ gh pr merge --repo Vitorspk/aws-landing-zone --squash --delete-branch <PR-number
 
 **Branch:** `fix/eks-public-endpoint-configurable`
 
-### Task B.1: Add `public_access_cidrs` variable to the `eks-cluster` module
+### Task 2.1: Add `public_access_cidrs` variable to the `eks-cluster` module
 
 **Files:**
 - Modify: `terraform/02-kubernetes/modules/eks-cluster/variables.tf` (add near the other network variables, after `cluster_security_group_id`)
@@ -311,7 +311,7 @@ git add terraform/02-kubernetes/modules/eks-cluster/variables.tf terraform/02-ku
 git commit -m "fix: make EKS public_access_cidrs configurable (was hardcoded to 0.0.0.0/0)"
 ```
 
-### Task B.2: Add a documented checkov skip for the two now-intentional findings
+### Task 2.2: Add a documented checkov skip for the two now-intentional findings
 
 **Files:**
 - Modify: `terraform/02-kubernetes/modules/eks-cluster/main.tf` (the `aws_eks_cluster "main"` resource block)
@@ -345,7 +345,7 @@ git add terraform/02-kubernetes/modules/eks-cluster/main.tf
 git commit -m "docs: add checkov skip for the intentionally-open EKS public endpoint"
 ```
 
-### Task B.3: Open PR, wait for checks, merge
+### Task 2.3: Open PR, wait for checks, merge
 
 - [ ] **Step 1: Push and open the PR**
 
@@ -368,7 +368,7 @@ gh pr merge --repo Vitorspk/aws-landing-zone --squash --delete-branch <PR-number
 
 **Branch:** `fix/destroy-infrastructure-safety`
 
-### Task C.1: Add a typed confirmation gate
+### Task 3.1: Add a typed confirmation gate
 
 **Files:**
 - Modify: `.github/workflows/destroy-infrastructure.yml` (the `on.workflow_dispatch.inputs` block and the first step)
@@ -436,7 +436,7 @@ unlike destroy-ingress-nginx.yml (which at least required 'yes').
 Matches azure-landing-zone's deploy-infrastructure.yml pattern."
 ```
 
-### Task C.2: Scope down the "Clear Terraform Locks" step
+### Task 3.2: Scope down the "Clear Terraform Locks" step
 
 **Files:**
 - Modify: `.github/workflows/destroy-infrastructure.yml` (the `Clear Terraform Locks` step, near the end)
@@ -499,7 +499,7 @@ with:
 - [ ] **Step 2: Verify**
 
 Run: `actionlint .github/workflows/destroy-infrastructure.yml`
-Expected: no new findings beyond the pre-existing baseline (same check as Task C.1 Step 3).
+Expected: no new findings beyond the pre-existing baseline (same check as Task 3.1 Step 3).
 
 - [ ] **Step 3: Commit**
 
@@ -512,7 +512,7 @@ terraform-state-lock DynamoDB table after every destroy run,
 including locks legitimately held by concurrent, unrelated runs."
 ```
 
-### Task C.3: Open PR, wait for checks, merge
+### Task 3.3: Open PR, wait for checks, merge
 
 - [ ] **Step 1: Push and open the PR**
 
@@ -535,7 +535,7 @@ gh pr merge --repo Vitorspk/aws-landing-zone --squash --delete-branch <PR-number
 
 **Branch:** `chore/ci-hardening`
 
-### Task D.1: Add `concurrency:` groups to all 4 operational workflows
+### Task 4.1: Add `concurrency:` groups to all 4 operational workflows
 
 **Files:**
 - Modify: `.github/workflows/deploy-infrastructure.yml`
@@ -593,7 +593,7 @@ git add .github/workflows/deploy-infrastructure.yml .github/workflows/destroy-in
 git commit -m "ci: add concurrency groups so deploy/destroy workflows can't race the same state or cluster"
 ```
 
-### Task D.2: Add `checkov` (report-only) to `terraform-ci.yml`
+### Task 4.2: Add `checkov` (report-only) to `terraform-ci.yml`
 
 **Files:**
 - Modify: `.github/workflows/terraform-ci.yml`
@@ -621,7 +621,7 @@ Add as a new top-level job, sibling to `validate` (after it):
 - [ ] **Step 2: Verify locally**
 
 Run: `checkov -d terraform/ --compact --quiet`
-Expected: `CKV_AWS_39`/`CKV_AWS_38` no longer appear in the failed list (skipped, per PR B Task B.2). The remaining ~26 findings (IAM policy wildcard/write-access warnings, CloudWatch log retention/encryption, security-group egress-all, public-IP-on-subnet) are expected and intentionally left as non-blocking CI visibility — none are fixed in this plan.
+Expected: `CKV_AWS_39`/`CKV_AWS_38` no longer appear in the failed list (skipped, per PR B Task 2.2). The remaining ~26 findings (IAM policy wildcard/write-access warnings, CloudWatch log retention/encryption, security-group egress-all, public-IP-on-subnet) are expected and intentionally left as non-blocking CI visibility — none are fixed in this plan.
 
 - [ ] **Step 3: Commit**
 
@@ -630,7 +630,7 @@ git add .github/workflows/terraform-ci.yml
 git commit -m "ci: add checkov security scan (report-only) to terraform-ci workflow"
 ```
 
-### Task D.3: Pin unpinned tool versions
+### Task 4.3: Pin unpinned tool versions
 
 **Files:**
 - Modify: `.github/workflows/terraform-ci.yml` (`tflint_version: latest`)
@@ -684,7 +684,7 @@ git add .github/workflows/terraform-ci.yml .github/workflows/deploy-ingress-ngin
 git commit -m "fix: pin tflint and kubectl versions (were both 'latest')"
 ```
 
-### Task D.4: Constrain the free-form destroy confirmation, reconcile the two `.tflint.hcl` files
+### Task 4.4: Constrain the free-form destroy confirmation, reconcile the two `.tflint.hcl` files
 
 **Files:**
 - Modify: `.github/workflows/destroy-ingress-nginx.yml` (the `confirm` input)
@@ -751,7 +751,7 @@ git add .github/workflows/destroy-ingress-nginx.yml terraform/02-kubernetes/.tfl
 git commit -m "fix: constrain destroy-ingress-nginx confirm input to a fixed choice; reconcile tflint configs"
 ```
 
-### Task D.5: Open PR, wait for checks, merge
+### Task 4.5: Open PR, wait for checks, merge
 
 - [ ] **Step 1: Push and open the PR**
 
@@ -774,7 +774,7 @@ gh pr merge --repo Vitorspk/aws-landing-zone --squash --delete-branch <PR-number
 
 **Branch:** `fix/makefile-broken-targets`
 
-### Task E.1: Repoint or remove targets that call nonexistent scripts
+### Task 5.1: Repoint or remove targets that call nonexistent scripts
 
 **Files:**
 - Modify: `Makefile`
@@ -886,7 +886,7 @@ setup-backend/cleanup/cleanup-k8s entirely (no equivalent scripts
 exist and they aren't required for apply/destroy to function)."
 ```
 
-### Task E.2: Open PR, wait for checks, merge
+### Task 5.2: Open PR, wait for checks, merge
 
 - [ ] **Step 1: Push and open the PR**
 
@@ -911,7 +911,7 @@ gh pr merge --repo Vitorspk/aws-landing-zone --squash --delete-branch <PR-number
 
 **Precondition:** PR B, D, and E must already be merged (this PR documents their end state).
 
-### Task F.1: Unify the CIDR scheme in `README.md`
+### Task 6.1: Unify the CIDR scheme in `README.md`
 
 **Files:**
 - Modify: `README.md:189-196`
@@ -947,9 +947,9 @@ VPC CIDR: `192.168.0.0/16`. Each environment gets a `/20` private-subnet allocat
 Public subnets (shared across all environments, one per AZ): `192.168.192.0/20`, `192.168.208.0/20`.
 ```
 
-- [ ] **Step 2: Commit is deferred to Task F.5 (all doc edits land in one commit per file touched — see that task for the full list)**
+- [ ] **Step 2: Commit is deferred to Task 6.5 (all doc edits land in one commit per file touched — see that task for the full list)**
 
-### Task F.2: Unify the CIDR scheme and endpoint claim in `docs/ARCHITECTURE.md`
+### Task 6.2: Unify the CIDR scheme and endpoint claim in `docs/ARCHITECTURE.md`
 
 **Files:**
 - Modify: `docs/ARCHITECTURE.md` (ASCII diagram around lines 10-46, table at lines 91-103, line 210)
@@ -1008,9 +1008,9 @@ with:
 - **API Endpoint**: Public by default (`public_access_cidrs` defaults to `0.0.0.0/0`) so CI (`deploy-ingress-nginx.yml`, running on GitHub-hosted runners) can reach the cluster — configurable per the `eks-cluster` module's `public_access_cidrs` variable if you have a stable IP/VPN to restrict it to
 ```
 
-- [ ] **Step 4: Commit is deferred to Task F.5**
+- [ ] **Step 4: Commit is deferred to Task 6.5**
 
-### Task F.3: Correct the "private cluster" claims in `README.md` and `docs/SECURITY.md`
+### Task 6.3: Correct the "private cluster" claims in `README.md` and `docs/SECURITY.md`
 
 **Files:**
 - Modify: `README.md:202, 239`
@@ -1058,9 +1058,9 @@ with:
 ```
 (Keep whatever comes immediately after this section in the file unchanged — only replace the heading and the 2-3 lines under it that make the false "private by default" claim.)
 
-- [ ] **Step 4: Commit is deferred to Task F.5**
+- [ ] **Step 4: Commit is deferred to Task 6.5**
 
-### Task F.4: Remove `docs/PROJECT_SUMMARY.md`, fix broken references
+### Task 6.4: Remove `docs/PROJECT_SUMMARY.md`, fix broken references
 
 **Files:**
 - Delete: `docs/PROJECT_SUMMARY.md`
@@ -1122,9 +1122,9 @@ make apply-kubernetes
 ```
 (The last block is already correct — those three targets do exist — leave it as-is if found unchanged; the fix is only for the four sets of nonexistent per-phase `init-*`/`plan-*`/`fmt` invocations.)
 
-- [ ] **Step 4: Commit is deferred to Task F.5**
+- [ ] **Step 4: Commit is deferred to Task 6.5**
 
-### Task F.5: Final commit, open PR, wait for checks, merge
+### Task 6.5: Final commit, open PR, wait for checks, merge
 
 - [ ] **Step 1: Verify no other file references the deleted doc or the fixed claims**
 
@@ -1177,7 +1177,7 @@ gh pr merge --repo Vitorspk/aws-landing-zone --squash --delete-branch <PR-number
 
 **Branch:** `docs/claude-md-model-tiers`
 
-### Task G.1: Add `.claude/settings.json`
+### Task 7.1: Add `.claude/settings.json`
 
 **Files:**
 - Create: `.claude/settings.json` (git-ignored — verify with `git check-ignore .claude/settings.json` before creating; if `.claude/` isn't already gitignored here, add it to `.gitignore` first, matching the sibling repos' convention)
@@ -1195,9 +1195,9 @@ Expected: prints `.claude/settings.json` (confirms it's ignored) — if this pri
 }
 ```
 
-- [ ] **Step 3: No commit needed for this file (it's gitignored, local-only) — proceed to Task G.2**
+- [ ] **Step 3: No commit needed for this file (it's gitignored, local-only) — proceed to Task 7.2**
 
-### Task G.2: Add `CLAUDE.md`
+### Task 7.2: Add `CLAUDE.md`
 
 **Files:**
 - Create: `CLAUDE.md`
@@ -1315,7 +1315,7 @@ adapted for this repo's EKS/AWS specifics and the lessons from the
 part of this commit."
 ```
 
-### Task G.3: Open PR, wait for checks, merge
+### Task 7.3: Open PR, wait for checks, merge
 
 - [ ] **Step 1: Push and open the PR**
 
