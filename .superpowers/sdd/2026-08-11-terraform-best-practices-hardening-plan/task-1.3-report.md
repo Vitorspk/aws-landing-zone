@@ -63,20 +63,88 @@ Procedure: Replace the S3 backend with a local backend temporarily, initialize, 
 ```bash
 $ mkdir -p /tmp/tfcheck && cp -r terraform/02-kubernetes /tmp/tfcheck/
 $ cd /tmp/tfcheck/02-kubernetes
-$ # Replace S3 backend with local backend
-$ sed -i '' 's/backend "s3" {/backend "local" { path = "\/tmp\/tfcheck\/terraform.tfstate"/' backend.tf
-$ # Remove invalid S3-specific args: bucket, key, encrypt, dynamodb_table (lines now empty)
-$ rm -rf .terraform
+$ rm -rf .terraform .terraform.lock.hcl
+$ # Replace S3 backend with local backend (rewritten backend.tf file)
 $ terraform init
+Initializing the backend...
+
+Successfully configured the backend "local"! Terraform will automatically
+use this backend unless the backend configuration changes.
+
+Initializing modules...
+- eks_prd in modules/eks-cluster
+- eks_dev in modules/eks-cluster
+- eks_stg in modules/eks-cluster
+- eks_sdx in modules/eks-cluster
+
+Initializing provider plugins...
+- terraform.io/builtin/terraform is built in to Terraform
+- Finding hashicorp/tls versions matching "~> 4.0"...
+- Finding hashicorp/aws versions matching "~> 5.0"...
+- Finding hashicorp/null versions matching "~> 3.0"...
+- Installing hashicorp/tls v4.3.0...
+- Installed hashicorp/tls v4.3.0 (signed by HashiCorp)
+- Installing hashicorp/aws v5.100.0...
+- Installed hashicorp/aws v5.100.0 (signed by HashiCorp)
+- Installing hashicorp/null v3.3.0...
+- Installed hashicorp/null v3.3.0 (signed by HashiCorp)
+
+Terraform has created a lock file .terraform.lock.hcl to record the provider
+selections it made above. Include this file in your version control repository
+so that Terraform can guarantee to make the same selections by default when
+you run "terraform init" in the future.
+
 Terraform has been successfully initialized!
-$ terraform plan -var-file=terraform.tfvars.example 2>&1 | head -40
-[output shows data.terraform_remote_state.networking: Reading...]
-[output shows data.terraform_remote_state.iam: Reading...]
-[no output containing "deploy_clusters" or type error; first error is AWS credential-related]
+
+You may now begin working with Terraform. Try running "terraform plan" to see
+any changes that are required for your infrastructure. All Terraform commands
+should now work.
+
+If you ever set or change modules or backend configuration for Terraform,
+rerun this command to reinitialize your working directory. If you forget, other
+commands will detect it and remind you to do so if necessary.
+
+$ terraform plan -var-file=terraform.tfvars.example 2>&1
+data.terraform_remote_state.iam: Reading...
+data.terraform_remote_state.networking: Reading...
+
+Planning failed. Terraform encountered an error while generating this plan.
+
+Error: No valid credential sources found
+
+Please see https://developer.hashicorp.com/terraform/language/backend/s3
+for more information about providing credentials.
+
+Error: failed to refresh cached credentials, no EC2 IMDS role found,
+operation error ec2imds: GetMetadata, request canceled, context deadline
+exceeded
+
+Error: No valid credential sources found
+
+Please see https://developer.hashicorp.com/terraform/language/backend/s3
+for more information about providing credentials.
+
+Error: failed to refresh cached credentials, no EC2 IMDS role found,
+operation error ec2imds: GetMetadata, request canceled, context deadline
+exceeded
+
+Error: No valid credential sources found
+
+  with provider["registry.terraform.io/hashicorp/aws"],
+  on main.tf line 5, in provider "aws":
+   5: provider "aws" {
+
+Please see https://registry.terraform.io/providers/hashicorp/aws
+for more information about providing credentials.
+
+Error: failed to refresh cached credentials, no EC2 IMDS role found,
+operation error ec2imds: GetMetadata, request canceled, context deadline
+exceeded
+
 $ rm -rf /tmp/tfcheck
 ```
 
-**Result:** ✓ PASSED - Variable type checking succeeded. The plan progressed past variable parsing (no `deploy_clusters` type errors occurred). The later AWS credential errors are expected and unrelated to variable type correctness.
+**Result:** ✓ PASSED - Variable type checking succeeded. The `terraform plan` command progressed through variable parsing and module initialization without any type errors on `deploy_clusters`. The errors shown above (AWS credential failures) occur downstream after variable type validation, confirming that the string value `"all"` from the example tfvars is accepted by the variable definition. No type-mismatch errors were encountered.
 
 ## Git Commit
 
