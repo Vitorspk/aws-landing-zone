@@ -53,6 +53,7 @@ module "eks_dev" {
   cluster_name              = var.clusters.dev.name
   cluster_role_arn          = local.eks_cluster_role_arns["dev"]
   kubernetes_version        = var.kubernetes_version
+  public_access_cidrs       = var.public_access_cidrs
   environment               = "dev"
   subnet_ids                = local.private_subnet_ids_by_env["dev"]
   cluster_security_group_id = local.eks_cluster_security_group_ids["dev"]
@@ -86,6 +87,7 @@ module "eks_stg" {
   cluster_name              = var.clusters.stg.name
   cluster_role_arn          = local.eks_cluster_role_arns["stg"]
   kubernetes_version        = var.kubernetes_version
+  public_access_cidrs       = var.public_access_cidrs
   environment               = "stg"
   subnet_ids                = local.private_subnet_ids_by_env["stg"]
   cluster_security_group_id = local.eks_cluster_security_group_ids["stg"]
@@ -119,6 +121,7 @@ module "eks_prd" {
   cluster_name              = var.clusters.prd.name
   cluster_role_arn          = local.eks_cluster_role_arns["prd"]
   kubernetes_version        = var.kubernetes_version
+  public_access_cidrs       = var.public_access_cidrs
   environment               = "prd"
   subnet_ids                = local.private_subnet_ids_by_env["prd"]
   cluster_security_group_id = local.eks_cluster_security_group_ids["prd"]
@@ -152,6 +155,7 @@ module "eks_sdx" {
   cluster_name              = var.clusters.sdx.name
   cluster_role_arn          = local.eks_cluster_role_arns["sdx"]
   kubernetes_version        = var.kubernetes_version
+  public_access_cidrs       = var.public_access_cidrs
   environment               = "sdx"
   subnet_ids                = local.private_subnet_ids_by_env["sdx"]
   cluster_security_group_id = local.eks_cluster_security_group_ids["sdx"]
