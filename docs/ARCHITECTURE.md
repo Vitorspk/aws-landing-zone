@@ -7,14 +7,14 @@
 │                         AWS Account                             │
 │                                                                 │
 │  ┌────────────────────────────────────────────────────────────┐ │
-│  │                     VPC (10.0.0.0/8)                       │ │
+│  │                     VPC (192.168.0.0/16)                   │ │
 │  │                                                            │ │
 │  │  ┌──────────────────────────┐  ┌──────────────────────────┐│ │
 │  │  │  Availability Zone A     │  │  Availability Zone B     ││ │
 │  │  │                          │  │                          ││ │
 │  │  │  ┌────────────────────┐  │  │  ┌────────────────────┐  ││ │
 │  │  │  │   Public Subnet    │  │  │  │   Public Subnet    │  ││ │
-│  │  │  │   10.0.0.0/24      │  │  │  │   10.0.1.0/24      │  ││ │
+│  │  │  │   192.168.192.0/20 │  │  │  │   192.168.208.0/20 │  ││ │
 │  │  │  │                    │  │  │  │                    │  ││ │
 │  │  │  │  ┌──────────────┐  │  │  │  │  ┌──────────────┐  │  ││ │
 │  │  │  │  │ NAT Gateway  │  │  │  │  │  │ NAT Gateway  │  │  ││ │
@@ -23,7 +23,7 @@
 │  │  │                          │  │                          ││ │
 │  │  │  ┌────────────────────┐  │  │  ┌────────────────────┐  ││ │
 │  │  │  │ Private Subnet DEV │  │  │  │ Private Subnet DEV │  ││ │
-│  │  │  │ 10.10.0.0/19       │  │  │  │ 10.10.32.0/19      │  ││ │
+│  │  │  │ 192.168.0.0/21     │  │  │  │ 192.168.8.0/21     │  ││ │
 │  │  │  │                    │  │  │  │                    │  ││ │
 │  │  │  │  ┌──────────────┐  │  │  │  │  ┌──────────────┐  │  ││ │
 │  │  │  │  │ EKS Nodes    │  │  │  │  │  │ EKS Nodes    │  │  ││ │
@@ -33,17 +33,17 @@
 │  │  │                          │  │                          ││ │
 │  │  │  ┌────────────────────┐  │  │  ┌────────────────────┐  ││ │
 │  │  │  │ Private Subnet STG │  │  │  │ Private Subnet STG │  ││ │
-│  │  │  │ 10.13.0.0/19       │  │  │  │ 10.13.32.0/19      │  ││ │
+│  │  │  │ 192.168.16.0/21    │  │  │  │ 192.168.24.0/21    │  ││ │
 │  │  │  └────────────────────┘  │  │  └────────────────────┘  ││ │
 │  │  │                          │  │                          ││ │
 │  │  │  ┌────────────────────┐  │  │  ┌────────────────────┐  ││ │
 │  │  │  │ Private Subnet PRD │  │  │  │ Private Subnet PRD │  ││ │
-│  │  │  │ 10.16.0.0/19       │  │  │  │ 10.16.32.0/19      │  ││ │
+│  │  │  │ 192.168.32.0/21    │  │  │  │ 192.168.40.0/21    │  ││ │
 │  │  │  └────────────────────┘  │  │  └────────────────────┘  ││ │
 │  │  │                          │  │                          ││ │
 │  │  │  ┌────────────────────┐  │  │  ┌────────────────────┐  ││ │
 │  │  │  │ Private Subnet SDX │  │  │  │ Private Subnet SDX │  ││ │
-│  │  │  │ 10.19.0.0/19       │  │  │  │ 10.19.32.0/19      │  ││ │
+│  │  │  │ 192.168.48.0/21    │  │  │  │ 192.168.56.0/21    │  ││ │
 │  │  │  └────────────────────┘  │  │  └────────────────────┘  ││ │
 │  │  └──────────────────────────┘  └──────────────────────────┘│ │
 │  │                                                            │ │
@@ -88,7 +88,7 @@
 **Purpose:** Create isolated network infrastructure with high availability.
 
 **VPC Configuration:**
-- **CIDR Block**: 10.0.0.0/8
+- **CIDR Block**: 192.168.0.0/16
 - **DNS Support**: Enabled
 - **DNS Hostnames**: Enabled
 
@@ -96,11 +96,11 @@
 
 | Type | Environment | AZ-A CIDR | AZ-B CIDR | Purpose |
 |------|-------------|-----------|-----------|---------|
-| Public | Shared | 10.0.0.0/24 | 10.0.1.0/24 | NAT Gateways, Load Balancers |
-| Private | DEV | 10.10.0.0/19 | 10.10.32.0/19 | EKS nodes, pods, services |
-| Private | STG | 10.13.0.0/19 | 10.13.32.0/19 | EKS nodes, pods, services |
-| Private | PRD | 10.16.0.0/19 | 10.16.32.0/19 | EKS nodes, pods, services |
-| Private | SDX | 10.19.0.0/19 | 10.19.32.0/19 | EKS nodes, pods, services |
+| Public | Shared | 192.168.192.0/20 | 192.168.208.0/20 | NAT Gateways, Load Balancers |
+| Private | DEV | 192.168.0.0/21 | 192.168.8.0/21 | EKS nodes, pods, services |
+| Private | STG | 192.168.16.0/21 | 192.168.24.0/21 | EKS nodes, pods, services |
+| Private | PRD | 192.168.32.0/21 | 192.168.40.0/21 | EKS nodes, pods, services |
+| Private | SDX | 192.168.48.0/21 | 192.168.56.0/21 | EKS nodes, pods, services |
 
 **Internet Gateway:**
 - Provides internet access for public subnets
@@ -207,7 +207,7 @@ Pod → VPC Endpoint → AWS Service (S3, ECR, etc.)
 ### Access Control
 - **IAM Roles**: Separate roles per environment
 - **RBAC**: Kubernetes role-based access control
-- **Private API Endpoint**: Optionally restrict API access
+- **API Endpoint**: Public by default (`public_access_cidrs` defaults to `0.0.0.0/0`) so CI (`deploy-ingress-nginx.yml`, running on GitHub-hosted runners) can reach the cluster — configurable per the `eks-cluster` module's `public_access_cidrs` variable if you have a stable IP/VPN to restrict it to
 - **SSM Session Manager**: No SSH keys required
 
 ## High Availability
