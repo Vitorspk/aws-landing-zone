@@ -31,6 +31,10 @@ on:
 env:
   AWS_REGION: ${{ secrets.AWS_DEFAULT_REGION || 'sa-east-1' }}
 
+concurrency:
+  group: ingress
+  cancel-in-progress: false
+
 jobs:
   destroy-ingress:
     name: Destroy Ingress NGINX
