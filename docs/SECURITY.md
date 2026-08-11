@@ -180,12 +180,10 @@ Before running `terraform apply`, verify:
 
 ## 🔒 Network Security
 
-### Private EKS Clusters
+### EKS Cluster Network Access
 
-This project uses private EKS clusters by default:
-
-- API endpoint not publicly accessible
-- Worker nodes in private subnets
+- Worker nodes run in private subnets.
+- The API endpoint's public access is **enabled by default** (`public_access_cidrs = ["0.0.0.0/0"]`) so `deploy-ingress-nginx.yml` can reach the cluster from GitHub-hosted runners. This is configurable via the `eks-cluster` module's `public_access_cidrs` variable — restrict it to a specific CIDR if you have a stable IP or VPN, but note that doing so will break the current CI-based ingress deployment unless you also add a self-hosted runner inside the VPC.
 - No direct internet access (via NAT Gateway)
 - VPC Endpoints for AWS services
 

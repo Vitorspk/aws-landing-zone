@@ -188,18 +188,22 @@ Trigger the `deploy-ingress-nginx` workflow with:
 
 ## Environments
 
-| Environment | Cluster | Subnet CIDR | Pods CIDR | Services CIDR |
-|-------------|---------|-------------|-----------|---------------|
-| Development | eks-dev | 10.10.0.0/19 | 10.11.0.0/16 | 10.12.0.0/16 |
-| Staging | eks-stg | 10.13.0.0/19 | 10.14.0.0/16 | 10.15.0.0/16 |
-| Production | eks-prd | 10.16.0.0/19 | 10.17.0.0/16 | 10.18.0.0/16 |
-| Sandbox | eks-sdx | 10.19.0.0/19 | 10.20.0.0/16 | 10.21.0.0/16 |
+VPC CIDR: `192.168.0.0/16`. Each environment gets a `/20` private-subnet allocation, split into two `/21`s across 2 availability zones.
+
+| Environment | Cluster | Private Subnet CIDR (/20) |
+|-------------|---------|---------------------------|
+| Development | eks-dev | 192.168.0.0/20 |
+| Staging | eks-stg | 192.168.16.0/20 |
+| Production | eks-prd | 192.168.32.0/20 |
+| Sandbox | eks-sdx | 192.168.48.0/20 |
+
+Public subnets (shared across all environments, one per AZ): `192.168.192.0/20`, `192.168.208.0/20`.
 
 ## Features
 
 - ✅ Centralized IAM management
 - ✅ Reusable IAM Roles across phases
-- ✅ Private EKS clusters with IRSA (IAM Roles for Service Accounts)
+- ✅ EKS clusters with IRSA (IAM Roles for Service Accounts); API endpoint is public by default (configurable, see docs/ARCHITECTURE.md)
 - ✅ NGINX Ingress Controllers (external + internal)
 - ✅ Selective cluster deployment
 - ✅ Automated validation and security scanning
@@ -236,7 +240,7 @@ Terraform state stored in S3:
 
 ## Security
 
-- Private EKS clusters (API endpoint not publicly accessible)
+- EKS worker nodes in private subnets; the API endpoint itself is public by default so CI can reach it, with `public_access_cidrs` configurable per cluster if you need to restrict it
 - IRSA (IAM Roles for Service Accounts) for pod-level permissions
 - Security groups for network isolation
 - VPC Flow Logs enabled
@@ -320,7 +324,7 @@ Contributions are welcome! Please:
 2. Create a feature branch
 3. Submit a pull request
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
+Open a PR against `master` — CI (`terraform-ci.yml`) and the automated Claude Code review must pass before merging.
 
 ## Compliance
 

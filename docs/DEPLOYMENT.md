@@ -111,7 +111,7 @@ cd ../..
 ```
 
 **What gets created:**
-- VPC with CIDR 10.0.0.0/8
+- VPC with CIDR 192.168.0.0/16
 - Public subnets across 2 AZs
 - Private subnets for each environment (dev, stg, prd, sdx) across 2 AZs
 - Internet Gateway
@@ -157,17 +157,13 @@ You can also use the provided Makefile for easier deployment:
 
 ```bash
 # Format all Terraform files
-make fmt
+make format
 
 # Initialize all phases
-make init-iam
-make init-networking
-make init-kubernetes
+make init
 
 # Plan all phases
-make plan-iam
-make plan-networking
-make plan-kubernetes
+make plan
 
 # Apply all phases
 make apply-iam
