@@ -10,6 +10,10 @@ on:
         options:
           - kubernetes-only
           - all
+      confirm_destroy:
+        description: 'Type "DESTROY" to confirm destruction'
+        required: true
+        type: string
 
 env:
   TF_VERSION: 1.5.0
@@ -23,7 +27,17 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
+      - name: Validate confirmation
+        env:
+          CONFIRM_DESTROY: ${{ github.event.inputs.confirm_destroy }}
+        run: |
+          if [ "$CONFIRM_DESTROY" != "DESTROY" ]; then
+            echo "❌ Destruction not confirmed. You must type 'DESTROY' (all caps) to confirm."
+            exit 1
+          fi
+          echo "✅ Destruction confirmed"
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -245,27 +259,25 @@ jobs:
       
       - name: Clear Terraform Locks
         run: |
-          echo "🔓 Clearing any stuck Terraform locks..."
-          
-          LOCKS=$(aws dynamodb scan \
-            --table-name terraform-state-lock \
-            --region ${{ env.AWS_REGION }} \
-            --query "Items[*].LockID.S" \
-            --output text 2>/dev/null || echo "")
-          
-          if [ ! -z "$LOCKS" ]; then
-            echo "$LOCKS" | tr '\t' '\n' | while read LOCK_ID; do
-              if [ ! -z "$LOCK_ID" ]; then
-                echo "  Clearing lock: $LOCK_ID"
-                aws dynamodb delete-item \
-                  --table-name terraform-state-lock \
-                  --key "{\"LockID\":{\"S\":\"$LOCK_ID\"}}" \
-                  --region ${{ env.AWS_REGION }} || true
-              fi
-            done
+          echo "🔓 Clearing locks for the state keys this run destroyed..."
+
+          BUCKET="vschiavo-home-terraform-state"
+          LOCK_IDS=("$BUCKET/aws-landing-zone/kubernetes/terraform.tfstate")
+
+          if [ "${{ github.event.inputs.scope }}" == "all" ]; then
+            LOCK_IDS+=("$BUCKET/aws-landing-zone/networking/terraform.tfstate")
+            LOCK_IDS+=("$BUCKET/aws-landing-zone/iam/terraform.tfstate")
           fi
-          
-          echo "  ✅ Locks cleared"
+
+          for LOCK_ID in "${LOCK_IDS[@]}"; do
+            echo "  Clearing lock (if present): $LOCK_ID"
+            aws dynamodb delete-item \
+              --table-name terraform-state-lock \
+              --key "{\"LockID\":{\"S\":\"$LOCK_ID\"}}" \
+              --region ${{ env.AWS_REGION }} || true
+          done
+
+          echo "  ✅ Locks cleared for this run's own state keys only"
       
       - name: Summary
         run: |
