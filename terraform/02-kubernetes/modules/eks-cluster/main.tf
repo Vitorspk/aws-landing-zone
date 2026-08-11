@@ -51,6 +51,8 @@ resource "aws_cloudwatch_log_group" "cluster" {
 # ==============================================================================
 
 resource "aws_eks_cluster" "main" {
+  #checkov:skip=CKV_AWS_39:Public endpoint intentionally enabled - deploy-ingress-nginx.yml runs kubectl from GitHub-hosted runners outside the VPC. See docs/superpowers/specs/2026-08-11-terraform-best-practices-hardening-design.md.
+  #checkov:skip=CKV_AWS_38:public_access_cidrs is intentionally 0.0.0.0/0 by default (now configurable via var.public_access_cidrs) for the same CI reason as above.
   name     = var.cluster_name
   role_arn = var.cluster_role_arn
   version  = var.kubernetes_version
@@ -59,7 +61,7 @@ resource "aws_eks_cluster" "main" {
     subnet_ids              = var.subnet_ids
     endpoint_private_access = true
     endpoint_public_access  = true
-    public_access_cidrs     = ["0.0.0.0/0"]
+    public_access_cidrs     = var.public_access_cidrs
     security_group_ids      = [var.cluster_security_group_id]
   }
 

@@ -36,6 +36,12 @@ variable "cluster_security_group_id" {
   type        = string
 }
 
+variable "public_access_cidrs" {
+  description = "CIDR blocks allowed to reach the EKS public API endpoint. Defaults to open (0.0.0.0/0) because deploy-ingress-nginx.yml runs kubectl from GitHub-hosted runners outside the VPC — restricting this without a self-hosted runner or VPN would break that workflow."
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
+}
+
 # ==============================================================================
 # NODE GROUP VARIABLES
 # ==============================================================================
