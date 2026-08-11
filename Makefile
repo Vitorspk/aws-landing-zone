@@ -1,4 +1,4 @@
-.PHONY: help init plan apply destroy cleanup reset validate format
+.PHONY: help check init plan apply-iam apply-networking apply-kubernetes apply-all destroy-kubernetes destroy-networking destroy-iam destroy-all reset validate format outputs state-list clusters
 
 # ==============================================================================
 # AWS LANDING ZONE - MAKEFILE
@@ -18,28 +18,17 @@ help: ## Show this help message
 # ==============================================================================
 
 check: ## Check prerequisites (AWS CLI, credentials, backend)
-	@chmod +x scripts/check-prerequisites.sh
-	@./scripts/check-prerequisites.sh
+	@chmod +x scripts/pre-deployment-check.sh
+	@./scripts/pre-deployment-check.sh
 
-setup-backend: ## Setup S3 bucket and DynamoDB table
-	@chmod +x scripts/setup-backend.sh
-	@./scripts/setup-backend.sh
 
 # ==============================================================================
 # CLEANUP
 # ==============================================================================
 
-cleanup: ## Cleanup conflicting CloudWatch log groups and K8s jobs
-	@chmod +x scripts/cleanup-resources.sh
-	@./scripts/cleanup-resources.sh
-
-reset: ## Complete reset - destroy all infrastructure
-	@chmod +x scripts/complete-reset.sh
-	@./scripts/complete-reset.sh
-
-cleanup-k8s: ## Cleanup Kubernetes jobs only
-	@chmod +x scripts/cleanup-k8s-jobs.sh
-	@./scripts/cleanup-k8s-jobs.sh
+reset: ## Complete reset - destroy all infrastructure (interactive confirmation)
+	@chmod +x scripts/force-delete-all.sh
+	@./scripts/force-delete-all.sh
 
 # ==============================================================================
 # TERRAFORM OPERATIONS - LOCAL
@@ -84,7 +73,7 @@ apply-kubernetes: ## Apply Phase 2 - Kubernetes
 		terraform init -backend-config="region=$(REGION)" && \
 		terraform apply -var="region=$(REGION)" -var="deploy_clusters=$(CLUSTERS)" -auto-approve
 
-apply-all: cleanup apply-iam apply-networking apply-kubernetes ## Apply all phases sequentially with cleanup
+apply-all: apply-iam apply-networking apply-kubernetes ## Apply all phases sequentially
 
 # ==============================================================================
 # DESTROY
@@ -105,7 +94,7 @@ destroy-iam: ## Destroy Phase 0 - IAM
 		terraform init -backend-config="region=$(REGION)" && \
 		terraform destroy -var="region=$(REGION)" -auto-approve
 
-destroy-all: destroy-kubernetes destroy-networking destroy-iam cleanup ## Destroy all phases in reverse order
+destroy-all: destroy-kubernetes destroy-networking destroy-iam ## Destroy all phases in reverse order
 
 # ==============================================================================
 # CODE QUALITY
