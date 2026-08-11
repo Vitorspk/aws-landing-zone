@@ -10,14 +10,6 @@ plugin "aws" {
 }
 
 # Ignore specific rules that may cause issues
-rule "terraform_unused_declarations" {
-  enabled = false  # Disable to avoid false positives
-}
-
-rule "terraform_required_providers" {
-  enabled = false  # We have the providers configured
-}
-
 rule "terraform_deprecated_interpolation" {
   enabled = true
 }
