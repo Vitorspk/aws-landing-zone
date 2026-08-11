@@ -52,7 +52,7 @@ jobs:
       - name: Setup tflint
         uses: terraform-linters/setup-tflint@v4
         with:
-          tflint_version: latest
+          tflint_version: v0.64.0
       
       - name: Init tflint
         working-directory: terraform/${{ matrix.phase }}
